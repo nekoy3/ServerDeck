@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ServerDeck - Home</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome CSS -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/">ServerDeck</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link active" aria-current="page" href="/">Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/config">Config</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <h1 class="mb-4">Your Servers & Services</h1>
+        <div class="row">
+            {% for server in servers %}
+            <div class="col-md-4">
+                <div class="card server-card">
+                    <div class="card-body server-card-body d-flex align-items-center">
+                        <i class="server-card-icon fas {% if server.type == 'ssh' %}fa-terminal ssh{% elif server.type == 'url' %}fa-globe url{% elif server.type == 'network_device' %}fa-network-wired network_device{% else %}fa-server{% endif %}"></i>
+                        <div>
+                            <h5 class="card-title server-card-title">{{ server.name }}</h5>
+                            <p class="card-text server-card-text"><strong>Type:</strong> {{ server.type | capitalize }}</p>
+                            {% if server.host %}
+                            <p class="card-text server-card-text"><strong>Host:</strong> {{ server.host }}</p>
+                            {% endif %}
+                            {% if server.url %}
+                            <p class="card-text server-card-text"><strong>URL:</strong> <a href="{{ server.url }}" target="_blank">{{ server.url }}</a></p>
+                            {% endif %}
+                            {% if server.description %}
+                            <p class="card-text server-card-text">{{ server.description }}</p>
+                            {% endif %}
+                            {% if server.tags %}
+                            <div class="server-card-tags">
+                                {% for tag in server.tags %}
+                                <span class="badge bg-secondary">{{ tag }}</span>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Bootstrap Bundle with Popper -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

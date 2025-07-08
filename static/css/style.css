@@ -1,0 +1,65 @@
+body {
+    background-color: #f8f9fa;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.container {
+    margin-top: 30px;
+}
+
+.server-card {
+    background-color: #ffffff;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    cursor: pointer;
+    margin-bottom: 20px;
+    overflow: hidden; /* Ensure no overflow for animations */
+}
+
+.server-card:hover {
+    transform: translateY(-5px); /* Lift effect */
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2); /* Stronger shadow */
+}
+
+.server-card-body {
+    padding: 20px;
+}
+
+.server-card-title {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: #343a40;
+    margin-bottom: 10px;
+}
+
+.server-card-text {
+    font-size: 0.9rem;
+    color: #6c757d;
+    margin-bottom: 5px;
+}
+
+.server-card-tags .badge {
+    margin-right: 5px;
+    margin-bottom: 5px;
+}
+
+/* Icon styling based on type */
+.server-card-icon {
+    font-size: 2rem;
+    margin-right: 15px;
+    color: #007bff; /* Default blue */
+}
+
+.server-card-icon.ssh {
+    color: #28a745; /* Green for SSH */
+}
+
+.server-card-icon.url {
+    color: #ffc107; /* Yellow for URL */
+}
+
+.server-card-icon.network_device {
+    color: #dc3545; /* Red for Network Device */
+}
