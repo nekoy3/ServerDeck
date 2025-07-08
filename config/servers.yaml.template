@@ -1,0 +1,51 @@
+servers:
+  # SSH接続するサーバーの例
+  - id: home_server
+    name: My Home Server
+    type: ssh # タイプを 'ssh' に設定
+    host: 192.168.1.100
+    port: 22
+    username: admin
+    auth_method: password # または 'key'
+    password: your_password # 環境変数など推奨
+    ssh_key_path: ~/.ssh/id_rsa
+    description: メインのファイルサーバー
+    tags: [home, storage]
+
+  # URLでアクセスするサービスの例
+  - id: grafana_dashboard
+    name: Grafana Dashboard
+    type: url # タイプを 'url' に設定
+    url: http://192.168.1.200:3000
+    description: 監視ダッシュボード
+    tags: [monitoring, dashboard]
+
+  - id: router_web_ui
+    name: Router Web UI
+    type: url
+    url: https://192.168.1.1
+    description: ルーターの管理画面
+    tags: [network, admin]
+
+  # ネットワーク機器（SSHでログイン）の例
+  - id: core_switch
+    name: Core Switch
+    type: network_device # タイプを 'network_device' に設定
+    host: 192.168.1.254
+    port: 22
+    username: admin
+    auth_method: password
+    password: switch_password
+    description: コアネットワークスイッチ
+    tags: [network, switch]
+
+  - id: access_point
+    name: Wireless AP
+    type: network_device
+    host: 192.168.1.253
+    port: 22
+    username: ap_admin
+    auth_method: key
+    ssh_key_path: ~/.ssh/id_ap
+    description: 無線LANアクセスポイント
+    tags: [network, wireless]
