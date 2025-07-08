@@ -16,7 +16,7 @@ SERVERS_CONFIG_PATH = os.path.join(CONFIG_DIR, 'servers.yaml')
 SSH_KEYS_CONFIG_PATH = os.path.join(CONFIG_DIR, 'ssh_keys.yaml')
 
 UPLOAD_FOLDER = os.path.join(CONFIG_DIR, 'uploaded_ssh_keys')
-ALLOWED_EXTENSIONS = {'pem', 'key', 'id_rsa', 'id_dsa', 'id_ecdsa', 'id_ed25519'} # Common SSH key extensions
+ALLOWED_EXTENSIONS = {'pem', 'key', 'id_rsa', 'id_dsa', 'id_ecdsa', 'id_ed25519', 'id_vm_machines'} # Common SSH key extensions and custom ones
 
 # Ensure upload folder exists
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
