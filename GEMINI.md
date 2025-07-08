@@ -1,87 +1,101 @@
-# ServerDeck Project Overview
+# ServerDeck プロジェクト概要
 
-## Project Name
+## プロジェクト名
 ServerDeck
 
-## Project Goal
+## プロジェクトの目的
 自宅サーバー群を管理するためのWebアプリケーション。
 
-## Key Features
+## 主要機能
 - **UIでのサーバーアクセス**: 各サーバーへのアクセスをブラウザ上で可能にするUI。
 - **動的なサーバー追加**: YAMLファイルなどを用いてサーバー情報を動的に追加・管理。
 - **ブラウザ上でのSSH接続**: WebベースのSSHクライアント機能を提供。
 
-## Technology Stack (Proposed)
-- **Backend**: Python (Flask)
-- **Frontend**: HTML, CSS, JavaScript (具体的なフレームワークは未定、必要に応じて検討)
-- **Server Management**: YAML for configuration, potentially Paramiko for SSH.
+## 技術スタック (提案)
+- **バックエンド**: Python (Flask)
+- **フロントエンド**: HTML, CSS, JavaScript (具体的なフレームワークは未定、必要に応じて検討)
+- **サーバー管理**: YAMLによる設定、SSHにはParamikoを使用する可能性あり。
 
-## Development Environment Setup
-(To be added later)
+## 開発環境セットアップ
 
-## Build, Test, Lint Commands
-(To be added later)
+本プロジェクトの開発環境は、主にDockerコンテナを使用して構築されます。これにより、環境依存の問題を最小限に抑え、開発者間で一貫した環境を提供します。
 
-## Coding Conventions
-(To be added later)
+1.  **Dockerのインストール**: Docker Desktop (またはDocker Engine) がシステムにインストールされていることを確認してください。
+2.  **リポジトリのクローン**: `git clone [リポジトリURL]` でプロジェクトをローカルにクローンします。
+3.  **Dockerコンテナの起動**: 「Dockerを使用した初期セットアップと実行」セクションの手順に従って、アプリケーションコンテナを起動します。
 
-## Important Files/Directories
-- `app.py`: Main Flask application file.
-- `templates/`: HTML templates.
-- `static/`: CSS, JavaScript, images.
-- `config/servers.yaml`: Server configuration file.
+## ビルド、テスト、Lintコマンド
 
-## General Development Workflow
-(To be added later)
+### ビルド
 
-## Known Issues/Notes
+アプリケーションのビルドは、Dockerイメージのビルドによって行われます。詳細については、「Dockerを使用した初期セットアップと実行」セクションの「Dockerイメージのビルド」を参照してください。
+
+### テスト
+(後で追加)
+
+### Lint
+(後で追加)
+
+## コーディング規約
+(後で追加)
+
+## 重要なファイル/ディレクトリ
+- `app.py`: メインのFlaskアプリケーションファイル。
+- `templates/`: HTMLテンプレート。
+- `static/`: CSS, JavaScript, 画像ファイル。
+- `config/servers.yaml`: サーバー設定ファイル。
+- `Dockerfile`: Dockerコンテナのビルド定義ファイル。
+- `requirements.txt`: Pythonの依存関係リスト。
+
+## 一般的な開発ワークフロー
+(後で追加)
+
+## 既知の問題/注意事項
 - SSH接続機能の実装にはセキュリティ面での考慮が重要。
 - 動的なサーバー追加・管理の仕組みをどのように設計するかが鍵。
 
-## Initial Setup after Cloning Repository
+## Dockerを使用した初期セットアップと実行
 
-To set up and run the ServerDeck application after cloning the repository, follow these steps:
+リポジトリをクローンした後、Dockerを使用してServerDeckアプリケーションをセットアップし実行するには、以下の手順に従ってください。
 
-1.  **Navigate to the project directory:**
+1.  **プロジェクトディレクトリへ移動:**
     ```bash
     cd ServerDeck
     ```
 
-2.  **Create a Python virtual environment:**
+2.  **Dockerイメージのビルド:**
     ```bash
-    python3 -m venv venv
+    docker build -t serverdeck-app .
+    ```
+    このコマンドは、現在のディレクトリにある`Dockerfile`に基づいて`serverdeck-app`という名前のDockerイメージをビルドします。
+
+3.  **Dockerコンテナの実行:**
+    ```bash
+    docker run -d -p 5001:5001 --name serverdeck-container serverdeck-app
+    ```
+    このコマンドは、`serverdeck-app`イメージをデタッチモード(`-d`)で実行し、ホストのポート5000をコンテナのポート5000にマッピング(`-p 5000:5000`)し、コンテナに`serverdeck-container`という名前を付けます。
+
+    アプリケーションは通常、ブラウザで`http://127.0.0.1:5000/`からアクセスできます。
+
+4.  **Dockerコンテナの停止 (完了時):**
+    ```bash
+    docker stop serverdeck-container
     ```
 
-3.  **Activate the virtual environment:**
+5.  **Dockerコンテナの削除 (不要になった場合):**
     ```bash
-    source venv/bin/activate
+    docker rm serverdeck-container
     ```
 
-4.  **Install required Python packages:**
-    ```bash
-    pip install Flask PyYAML
-    ```
+## 最近の変更
 
-5.  **Run the Flask application:**
-    ```bash
-    python app.py
-    ```
-    The application will typically run on `http://127.0.0.1:5000/`.
+### 設定ページをモーダル化
 
-6.  **Deactivate the virtual environment (when done):**
-    ```bash
-    deactivate
-    ```
+設定ページ (`/config`) がメインページ上のモーダルオーバーレイとして表示されるようになりました。
+ナビゲーションバーの「Config」リンクをクリックすると、設定コンテンツがBootstrapモーダルに動的に読み込まれ、ページ全体のリロードなしでシームレスなユーザーエクスペリエンスを提供します。
 
-## Recent Changes
-
-### Config Page as Modal
-
-The configuration page (`/config`) is now displayed as a modal overlay on the main page.
-Clicking the "Config" link in the navigation bar will load the configuration content dynamically into a Bootstrap modal, providing a seamless user experience without full page reloads.
-
-**Files affected:**
-- `app.py`: Modified `/config` route to render `config_modal_content.html`.
-- `templates/index.html`: Added Bootstrap modal structure and updated "Config" link to trigger the modal.
-- `templates/config_modal_content.html`: New file containing the actual content of the configuration page, designed to be loaded into the modal.
-- `static/js/script.js`: Updated to handle dynamic loading of config content into the modal and re-initialization of JavaScript logic for the loaded content.
+**影響を受けるファイル:**
+- `app.py`: `/config`ルートが`config_modal_content.html`をレンダリングするように変更されました。
+- `templates/index.html`: Bootstrapモーダル構造が追加され、「Config」リンクがモーダルをトリガーするように更新されました。
+- `templates/config_modal_content.html`: モーダルに読み込まれるように設計された、設定ページの実際のコンテンツを含む新しいファイルです。
+- `static/js/script.js`: モーダルへの設定コンテンツの動的読み込みと、読み込まれたコンテンツのJavaScriptロジックの再初期化を処理するように更新されました。
