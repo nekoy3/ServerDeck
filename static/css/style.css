@@ -63,3 +63,39 @@ body {
 .server-card-icon.network_device {
     color: #dc3545; /* Red for Network Device */
 }
+
+/* Config Page Specific Styles */
+.add-server-card {
+    border: 2px dashed #cccccc;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 150px; /* Adjust as needed */
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+.add-server-card:hover {
+    background-color: #e9ecef;
+}
+
+.add-server-card .fa-plus-circle {
+    font-size: 3rem;
+    color: #6c757d;
+}
+
+.config-server-card .card-body {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    height: 100%;
+}
+
+.config-server-card .card-footer {
+    background-color: #f8f9fa;
+    border-top: 1px solid #e0e0e0;
+    padding: 10px 20px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}

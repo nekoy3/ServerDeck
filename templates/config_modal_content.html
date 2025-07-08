@@ -1,0 +1,75 @@
+<div class="container-fluid">
+    <h1 class="mb-4">サーバー設定</h1>
+    <div class="row" id="server-list">
+        <!-- Server cards will be loaded here by JavaScript -->
+    </div>
+</div>
+
+<!-- Server Edit/Add Modal (This modal is nested within the main config modal) -->
+<div class="modal fade" id="serverModal" tabindex="-1" aria-labelledby="serverModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="serverModalLabel">サーバーの追加/編集</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="serverForm">
+                    <input type="hidden" id="serverId" name="id">
+                    <div class="mb-3">
+                        <label for="serverName" class="form-label">名前</label>
+                        <input type="text" class="form-control" id="serverName" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="serverType" class="form-label">タイプ</label>
+                        <select class="form-select" id="serverType" name="type" required>
+                            <option value="ssh">SSHサーバー</option>
+                            <option value="url">URLサービス</option>
+                            <option value="network_device">ネットワークデバイス</option>
+                        </select>
+                    </div>
+                    <div class="mb-3" id="hostGroup">
+                        <label for="serverHost" class="form-label">ホスト</label>
+                        <input type="text" class="form-control" id="serverHost" name="host">
+                    </div>
+                    <div class="mb-3" id="portGroup">
+                        <label for="serverPort" class="form-label">ポート</label>
+                        <input type="number" class="form-control" id="serverPort" name="port" value="22">
+                    </div>
+                    <div class="mb-3" id="urlGroup">
+                        <label for="serverUrl" class="form-label">URL</label>
+                        <input type="url" class="form-control" id="serverUrl" name="url">
+                    </div>
+                    <div class="mb-3" id="usernameGroup">
+                        <label for="serverUsername" class="form-label">ユーザー名</label>
+                        <input type="text" class="form-control" id="serverUsername" name="username">
+                    </div>
+                    <div class="mb-3" id="authMethodGroup">
+                        <label for="serverAuthMethod" class="form-label">認証方法</label>
+                        <select class="form-select" id="serverAuthMethod" name="auth_method">
+                            <option value="password">パスワード</option>
+                            <option value="key">SSHキー</option>
+                        </select>
+                    </div>
+                    <div class="mb-3" id="passwordGroup">
+                        <label for="serverPassword" class="form-label">パスワード</label>
+                        <input type="password" class="form-control" id="serverPassword" name="password">
+                    </div>
+                    <div class="mb-3" id="sshKeyPathGroup">
+                        <label for="serverSshKeyPath" class="form-label">SSHキーパス</label>
+                        <input type="text" class="form-control" id="serverSshKeyPath" name="ssh_key_path">
+                    </div>
+                    <div class="mb-3">
+                        <label for="serverDescription" class="form-label">説明</label>
+                        <textarea class="form-control" id="serverDescription" name="description" rows="3"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="serverTags" class="form-label">タグ (カンマ区切り)</label>
+                        <input type="text" class="form-control" id="serverTags" name="tags">
+                    </div>
+                    <button type="submit" class="btn btn-primary">変更を保存</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>

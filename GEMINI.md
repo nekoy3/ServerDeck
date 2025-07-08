@@ -72,3 +72,16 @@ To set up and run the ServerDeck application after cloning the repository, follo
     ```bash
     deactivate
     ```
+
+## Recent Changes
+
+### Config Page as Modal
+
+The configuration page (`/config`) is now displayed as a modal overlay on the main page.
+Clicking the "Config" link in the navigation bar will load the configuration content dynamically into a Bootstrap modal, providing a seamless user experience without full page reloads.
+
+**Files affected:**
+- `app.py`: Modified `/config` route to render `config_modal_content.html`.
+- `templates/index.html`: Added Bootstrap modal structure and updated "Config" link to trigger the modal.
+- `templates/config_modal_content.html`: New file containing the actual content of the configuration page, designed to be loaded into the modal.
+- `static/js/script.js`: Updated to handle dynamic loading of config content into the modal and re-initialization of JavaScript logic for the loaded content.

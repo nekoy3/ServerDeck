@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ServerDeck - Home</title>
+    <title>ServerDeck - ホーム</title>
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Font Awesome CSS -->
@@ -21,10 +21,10 @@
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav ms-auto">
                     <li class="nav-item">
-                        <a class="nav-link active" aria-current="page" href="/">Home</a>
+                        <a class="nav-link active" aria-current="page" href="/">ホーム</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="/config">Config</a>
+                        <a class="nav-link" href="#" id="configLink">設定</a>
                     </li>
                 </ul>
             </div>
@@ -32,7 +32,7 @@
     </nav>
 
     <div class="container">
-        <h1 class="mb-4">Your Servers & Services</h1>
+        <h1 class="mb-4">あなたのサーバーとサービス</h1>
         <div class="row">
             {% for server in servers %}
             <div class="col-md-4">
@@ -41,9 +41,9 @@
                         <i class="server-card-icon fas {% if server.type == 'ssh' %}fa-terminal ssh{% elif server.type == 'url' %}fa-globe url{% elif server.type == 'network_device' %}fa-network-wired network_device{% else %}fa-server{% endif %}"></i>
                         <div>
                             <h5 class="card-title server-card-title">{{ server.name }}</h5>
-                            <p class="card-text server-card-text"><strong>Type:</strong> {{ server.type | capitalize }}</p>
+                            <p class="card-text server-card-text"><strong>タイプ:</strong> {{ server.type | capitalize }}</p>
                             {% if server.host %}
-                            <p class="card-text server-card-text"><strong>Host:</strong> {{ server.host }}</p>
+                            <p class="card-text server-card-text"><strong>ホスト:</strong> {{ server.host }}</p>
                             {% endif %}
                             {% if server.url %}
                             <p class="card-text server-card-text"><strong>URL:</strong> <a href="{{ server.url }}" target="_blank">{{ server.url }}</a></p>
@@ -66,7 +66,27 @@
         </div>
     </div>
 
+    <!-- Config Modal -->
+    <div class="modal fade" id="configModal" tabindex="-1" aria-labelledby="configModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="configModalLabel">ServerDeck 設定</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" id="configModalBody">
+                    <!-- Config content will be loaded here -->
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Bootstrap Bundle with Popper -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Custom JavaScript -->
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
 </body>
 </html>
