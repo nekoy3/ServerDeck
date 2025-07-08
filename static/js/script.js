@@ -20,7 +20,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const serverUsernameInput = document.getElementById('serverUsername');
         const serverAuthMethodSelect = document.getElementById('serverAuthMethod');
         const serverPasswordInput = document.getElementById('serverPassword');
-        const serverSshKeyPathInput = document.getElementById('serverSshKeyPath');
+        const serverSshKeyIdSelect = document.getElementById('serverSshKeyId'); // Changed from Path to Id
         const serverDescriptionInput = document.getElementById('serverDescription');
         const serverTagsInput = document.getElementById('serverTags');
 
@@ -31,7 +31,20 @@ document.addEventListener('DOMContentLoaded', function() {
         const usernameGroup = document.getElementById('usernameGroup');
         const authMethodGroup = document.getElementById('authMethodGroup');
         const passwordGroup = document.getElementById('passwordGroup');
-        const sshKeyPathGroup = document.getElementById('sshKeyPathGroup');
+        const sshKeySelectGroup = document.getElementById('sshKeySelectGroup'); // Changed from Path to Select
+
+        // SSH Key Management Elements
+        const manageSshKeysBtn = document.getElementById('manageSshKeysBtn');
+        const sshKeyModal = new bootstrap.Modal(document.getElementById('sshKeyModal'));
+        const sshKeyList = document.getElementById('sshKeyList');
+        const addSshKeyBtn = document.getElementById('addSshKeyBtn');
+        const sshKeyForm = document.getElementById('sshKeyForm');
+        const sshKeyIdInput = document.getElementById('sshKeyId');
+        const sshKeyNameInput = document.getElementById('sshKeyName');
+        const sshKeyPathInput = document.getElementById('sshKeyPath');
+        const sshKeyFileInput = document.getElementById('sshKeyFile'); // New: SSH Key File Input
+        const cancelSshKeyEditBtn = document.getElementById('cancelSshKeyEditBtn');
+        let editingSshKeyId = null;
 
         // Function to fetch servers and render them
         async function fetchAndRenderServers() {
@@ -111,12 +124,13 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
 
-        function attachEventListeners() {
+        async function attachEventListeners() {
             // Edit buttons
             document.querySelectorAll('.edit-btn').forEach(button => {
-                button.onclick = (event) => {
+                button.onclick = async (event) => {
                     const serverId = event.target.dataset.id;
                     editingServerId = serverId;
+                    await populateSshKeySelect(); // Populate SSH keys before opening modal
                     populateModalForEdit(serverId);
                     serverModal.show();
                 };
@@ -148,10 +162,11 @@ document.addEventListener('DOMContentLoaded', function() {
             // Add New Server card
             const addServerCard = document.getElementById('addServerCard');
             if (addServerCard) {
-                addServerCard.onclick = () => {
+                addServerCard.onclick = async () => {
                     editingServerId = null; // Reset for new server
                     serverForm.reset(); // Clear form
                     serverIdInput.readOnly = false; // ID should be editable for new server
+                    await populateSshKeySelect(); // Populate SSH keys before opening modal
                     serverModal.show();
                     toggleFormFields(); // Show default fields for new server
                 };
@@ -176,7 +191,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     serverUsernameInput.value = server.username || '';
                     serverAuthMethodSelect.value = server.auth_method || 'password';
                     serverPasswordInput.value = ''; // Never pre-fill password for security
-                    serverSshKeyPathInput.value = server.ssh_key_path || '';
+                    serverSshKeyIdSelect.value = server.ssh_key_id || ''; // Set selected SSH key
                     serverDescriptionInput.value = server.description || '';
                     serverTagsInput.value = (server.tags && server.tags.length > 0) ? server.tags.join(', ') : '';
 
@@ -202,7 +217,7 @@ document.addEventListener('DOMContentLoaded', function() {
             usernameGroup.style.display = 'none';
             authMethodGroup.style.display = 'none';
             passwordGroup.style.display = 'none';
-            sshKeyPathGroup.style.display = 'none';
+            sshKeySelectGroup.style.display = 'none'; // Changed from Path to Select
 
             // Show relevant fields based on type
             if (type === 'ssh' || type === 'network_device') {
@@ -214,7 +229,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (serverAuthMethodSelect.value === 'password') {
                     passwordGroup.style.display = 'block';
                 } else {
-                    sshKeyPathGroup.style.display = 'block';
+                    sshKeySelectGroup.style.display = 'block'; // Show SSH key select
                 }
             } else if (type === 'url') {
                 urlGroup.style.display = 'block';
@@ -231,6 +246,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
             const formData = new FormData(serverForm);
             const serverData = {};
+
+            // Generate a unique ID for new servers if not provided
+            if (!editingServerId && !serverIdInput.value) {
+                serverData.id = `server-${Date.now()}`; // Simple unique ID based on timestamp
+            }
+
             for (let [key, value] of formData.entries()) {
                 if (key === 'tags') {
                     serverData[key] = value.split(',').map(tag => tag.trim()).filter(tag => tag !== '');
@@ -241,9 +262,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
 
-            // Remove empty string values for optional fields
+            // Ensure required fields (id, name, type) are not deleted if empty, as they are validated by backend
+            const requiredFields = ['id', 'name', 'type'];
             for (const key in serverData) {
-                if (serverData[key] === '' || serverData[key] === null || (Array.isArray(serverData[key]) && serverData[key].length === 0)) {
+                if (!requiredFields.includes(key) && (serverData[key] === '' || serverData[key] === null || (Array.isArray(serverData[key]) && serverData[key].length === 0))) {
                     delete serverData[key];
                 }
             }
@@ -251,6 +273,14 @@ document.addEventListener('DOMContentLoaded', function() {
             // Handle password field: only send if it's not empty
             if (serverPasswordInput.value === '') {
                 delete serverData.password;
+            }
+
+            // If SSH key authentication is selected, ensure ssh_key_id is sent and ssh_key_path is not
+            if (serverData.auth_method === 'key') {
+                serverData.ssh_key_id = serverSshKeyIdSelect.value; // Use selected SSH key ID
+                delete serverData.ssh_key_path; // Ensure old field is not sent
+            } else {
+                delete serverData.ssh_key_id; // Ensure ssh_key_id is not sent if not using key auth
             }
 
             const method = editingServerId ? 'PUT' : 'POST';
@@ -276,6 +306,202 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.error('Error saving server:', error);
                 alert('サーバーの保存中にエラーが発生しました。');
             }
+        });
+
+        // --- SSH Key Management Logic ---
+
+        // Populate SSH Key Select dropdown
+        async function populateSshKeySelect() {
+            try {
+                const response = await fetch('/api/ssh_keys');
+                const sshKeys = await response.json();
+                serverSshKeyIdSelect.innerHTML = '<option value="">選択してください</option>'; // Clear and add default
+                sshKeys.forEach(key => {
+                    const option = document.createElement('option');
+                    option.value = key.id;
+                    option.textContent = key.name;
+                    serverSshKeyIdSelect.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error fetching SSH keys for select:', error);
+            }
+        }
+
+        // Fetch and render SSH keys in the management modal
+        async function fetchAndRenderSshKeys() {
+            try {
+                const response = await fetch('/api/ssh_keys');
+                const sshKeys = await response.json();
+                sshKeyList.innerHTML = ''; // Clear existing list
+                if (sshKeys.length === 0) {
+                    sshKeyList.innerHTML = '<p class="text-muted">登録されたSSHキーはありません。</p>';
+                } else {
+                    sshKeys.forEach(key => {
+                        const keyItem = `
+                            <div class="list-group-item d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong>${key.name}</strong><br>
+                                    <small>${key.path}</small>
+                                </div>
+                                <div>
+                                    <button class="btn btn-sm btn-info edit-ssh-key-btn" data-id="${key.id}">編集</button>
+                                    <button class="btn btn-sm btn-danger delete-ssh-key-btn" data-id="${key.id}">削除</button>
+                                </div>
+                            </div>
+                        `;
+                        sshKeyList.insertAdjacentHTML('beforeend', keyItem);
+                    });
+                }
+                attachSshKeyEventListeners();
+            } catch (error) {
+                console.error('Error fetching SSH keys:', error);
+                alert('SSHキーの読み込みに失敗しました。');
+            }
+        }
+
+        // Attach event listeners for SSH key management buttons
+        function attachSshKeyEventListeners() {
+            document.querySelectorAll('.edit-ssh-key-btn').forEach(button => {
+                button.onclick = async (event) => {
+                    const keyId = event.target.dataset.id;
+                    editingSshKeyId = keyId;
+                    const response = await fetch('/api/ssh_keys');
+                    const sshKeys = await response.json();
+                    const key = sshKeys.find(k => k.id === keyId);
+                    if (key) {
+                        sshKeyIdInput.value = key.id;
+                        sshKeyNameInput.value = key.name;
+                        sshKeyPathInput.value = key.path;
+                        cancelSshKeyEditBtn.style.display = 'inline-block';
+                    }
+                };
+            });
+
+            document.querySelectorAll('.delete-ssh-key-btn').forEach(button => {
+                button.onclick = async (event) => {
+                    const keyId = event.target.dataset.id;
+                    if (confirm(`ID: ${keyId} のSSHキーを削除してもよろしいですか？`)) {
+                        try {
+                            const response = await fetch(`/api/ssh_keys/${keyId}`, {
+                                method: 'DELETE'
+                            });
+                            if (response.ok) {
+                                fetchAndRenderSshKeys();
+                                populateSshKeySelect(); // Update server form select
+                            } else {
+                                const errorData = await response.json();
+                                alert(`SSHキーの削除に失敗しました: ${errorData.error || response.statusText}`);
+                            }
+                        } catch (error) {
+                            console.error('Error deleting SSH key:', error);
+                            alert('SSHキーの削除中にエラーが発生しました。');
+                        }
+                    }
+                };
+            });
+        }
+
+        // Handle SSH Key Form Submission
+        sshKeyForm.addEventListener('submit', async function(event) {
+            event.preventDefault();
+
+            const formData = new FormData(sshKeyForm);
+            const keyData = {};
+
+            // Validate that either path or file is provided
+            if (!sshKeyPathInput.value && sshKeyFileInput.files.length === 0) {
+                alert('SSHキーのパスを入力するか、ファイルをアップロードしてください。');
+                return; // Stop submission
+            }
+
+            // If a file is selected, upload it first
+            if (sshKeyFileInput.files.length > 0) {
+                const file = sshKeyFileInput.files[0];
+                const uploadFormData = new FormData();
+                uploadFormData.append('file', file);
+
+                try {
+                    const uploadResponse = await fetch('/api/ssh_keys/upload', {
+                        method: 'POST',
+                        body: uploadFormData
+                    });
+
+                    if (uploadResponse.ok) {
+                        const uploadResult = await uploadResponse.json();
+                        keyData.path = uploadResult.path; // Set the path from the upload response
+                    } else {
+                        const errorData = await uploadResponse.json();
+                        alert(`ファイルのアップロードに失敗しました: ${errorData.error || uploadResponse.statusText}`);
+                        return; // Stop submission if upload fails
+                    }
+                } catch (error) {
+                    console.error('Error uploading file:', error);
+                    alert('ファイルのアップロード中にエラーが発生しました。');
+                    return; // Stop submission if upload fails
+                }
+            } else if (sshKeyPathInput.value) {
+                keyData.path = sshKeyPathInput.value;
+            }
+
+            for (let [key, value] of formData.entries()) {
+                if (key !== 'file') { // Exclude the file input from direct form data processing
+                    keyData[key] = value;
+                }
+            }
+
+            // Generate a unique ID for new SSH keys if not provided
+            if (!editingSshKeyId && !keyData.id) {
+                keyData.id = `sshkey-${Date.now()}`; // Simple unique ID
+            }
+
+            const method = editingSshKeyId ? 'PUT' : 'POST';
+            const url = editingSshKeyId ? `/api/ssh_keys/${editingSshKeyId}` : '/api/ssh_keys';
+
+            try {
+                const response = await fetch(url, {
+                    method: method,
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(keyData)
+                });
+
+                if (response.ok) {
+                    sshKeyForm.reset();
+                    editingSshKeyId = null;
+                    cancelSshKeyEditBtn.style.display = 'none';
+                    fetchAndRenderSshKeys();
+                    populateSshKeySelect(); // Update server form select
+                } else {
+                    const errorData = await response.json();
+                    alert(`SSHキーの保存に失敗しました: ${errorData.error || response.statusText}`);
+                }
+            } catch (error) {
+                console.error('Error saving SSH key:', error);
+                alert('SSHキーの保存中にエラーが発生しました。');
+            }
+        });
+
+        // Add New SSH Key button click
+        addSshKeyBtn.addEventListener('click', () => {
+            editingSshKeyId = null;
+            sshKeyForm.reset();
+            sshKeyIdInput.value = ''; // Ensure ID is clear for new entry
+            cancelSshKeyEditBtn.style.display = 'none';
+        });
+
+        // Cancel SSH Key Edit button click
+        cancelSshKeyEditBtn.addEventListener('click', () => {
+            editingSshKeyId = null;
+            sshKeyForm.reset();
+            sshKeyIdInput.value = '';
+            cancelSshKeyEditBtn.style.display = 'none';
+        });
+
+        // Manage SSH Keys button click
+        manageSshKeysBtn.addEventListener('click', () => {
+            fetchAndRenderSshKeys();
+            sshKeyModal.show();
         });
 
         // Initial fetch and render when config modal content is loaded

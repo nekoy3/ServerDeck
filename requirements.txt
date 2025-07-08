@@ -1,2 +1,4 @@
 Flask
 PyYAML
+paramiko
+Flask-SocketIO

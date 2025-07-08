@@ -87,12 +87,12 @@ git pull origin main
 
 新機能の開発やバグ修正を行う際は、`main`ブランチから新しいブランチを作成し、そのブランチで作業を進めることを推奨します。
 
-1.  **新しいブランチの作成と切り替え**:
+1.  **新しいブランチの作成と切り替え**: 
     ```bash
     git checkout -b feature/your-feature-name
     ```
 
-2.  **ブランチの切り替え**:
+2.  **ブランチの切り替え**: 
     ```bash
     git checkout main
     ```
@@ -108,6 +108,36 @@ git branch --unset-upstream
 ## 既知の問題/注意事項
 - SSH接続機能の実装にはセキュリティ面での考慮が重要。
 - 動的なサーバー追加・管理の仕組みをどのように設計するかが鍵。
+
+### SSHキーの安全な管理 (Docker環境)
+
+SSH秘密鍵をDockerイメージに直接含めることは、セキュリティ上のリスクを伴います。秘密鍵が漏洩した場合、サーバーへの不正アクセスにつながる可能性があります。ServerDeckがSSHキー認証で接続を行う場合、秘密鍵へのアクセスが必要です。
+
+より安全にSSHキーを管理するためには、Dockerの**バインドマウント**機能を使用することを推奨します。これにより、ホストマシン上の秘密鍵ファイルをコンテナ内部にマウントし、秘密鍵をイメージに含めることなくコンテナからアクセスできるようになります。
+
+**手順:**
+
+1.  **ホストマシン上にSSH秘密鍵を配置する**: 
+    通常、SSH秘密鍵は`~/.ssh/`ディレクトリに保存されています。例: `/home/user/.ssh/id_rsa`
+
+2.  **`config/ssh_keys.yaml`にコンテナ内のパスを登録する**: 
+    ServerDeckのSSHキー管理画面でSSHキーを登録する際、`パス`の項目には、**コンテナ内部から見た秘密鍵のパス**を指定します。
+    例えば、ホストの`/Users/nekoy/.ssh/id_vm_machines`をコンテナの`/root/.ssh/id_vm_machines`にマウントする場合、`config/ssh_keys.yaml`には`/root/.ssh/id_vm_machines`と登録します。
+
+3.  **`docker run`コマンドでバインドマウントを設定する**: 
+    コンテナを起動する際に、`-v`オプションを使用してホストの秘密鍵ディレクトリをコンテナ内にマウントします。
+
+    ```bash
+    docker run -d -p 5001:5001 \
+      -v /Users/nekoy/.ssh:/root/.ssh:ro \
+      --name serverdeck-container serverdeck-app
+    ```
+    *   `/Users/nekoy/.ssh`: ホストマシン上のSSH秘密鍵が保存されているディレクトリの絶対パス。
+    *   `/root/.ssh`: コンテナ内部でSSH秘密鍵がマウントされるパス。`paramiko`がデフォルトで`~/.ssh`を探すため、このパスが推奨されます。
+    *   `:ro`: 読み取り専用（read-only）でマウントすることを意味し、コンテナがホストのファイルを誤って変更するのを防ぎます。
+
+    **重要**: SSH秘密鍵のパーミッションは`600`（所有者のみ読み書き可能）または`400`（所有者のみ読み取り可能）に設定されている必要があります。これより緩いパーミッションだと、SSH接続が拒否される場合があります。
+
 
 ## Dockerを使用した初期セットアップと実行
 
@@ -141,6 +171,59 @@ git branch --unset-upstream
     ```bash
     docker rm serverdeck-container
     ```
+
+## Dockerコンテナの再起動スクリプト
+
+開発中にDockerコンテナを再起動する際に便利なスクリプトを以下に示します。これらのスクリプトは、`ServerDeck`ディレクトリのルートに配置することを想定しています。
+
+### 1. イメージを再ビルドしてコンテナを再起動する (restart_full.sh)
+
+コードの変更（特に`app.py`、`requirements.txt`、`Dockerfile`など）を反映させる必要がある場合に実行します。これにより、新しいDockerイメージがビルドされ、既存のコンテナが削除されて新しいコンテナが起動します。
+
+```bash
+#!/bin/bash
+
+echo "Stopping and removing existing Docker container..."
+docker stop serverdeck-container && docker rm serverdeck-container
+
+echo "Building new Docker image..."
+docker build -t serverdeck-app .
+
+echo "Starting new Docker container..."
+docker run -d -p 5001:5001 --name serverdeck-container serverdeck-app
+
+echo "ServerDeck application restarted with new image. Access at http://127.0.0.1:5001/"
+```
+
+### 2. ビルド不要でコンテナを再起動する (restart_app.sh)
+
+コードの変更がない場合や、コンテナの再起動のみが必要な場合に実行します。既存のDockerイメージを使用し、コンテナを停止して再起動します。
+
+```bash
+#!/bin/bash
+
+echo "Stopping and restarting Docker container..."
+docker stop serverdeck-container && docker start serverdeck-container
+
+echo "ServerDeck application restarted. Access at http://127.0.0.1:5001/"
+```
+
+**使用方法:**
+
+1.  上記のコードをそれぞれ`restart_full.sh`と`restart_app.sh`という名前で`ServerDeck`ディレクトリに保存します。
+2.  実行権限を付与します。
+    ```bash
+    chmod +x restart_full.sh restart_app.sh
+    ```
+3.  スクリプトを実行します。
+    ```bash
+    ./restart_full.sh
+    ./restart_app.sh
+    ```
+
+## エージェントとのインタラクションガイドライン
+
+エージェント（Gemini）がコードの変更を行った際、必要に応じてDockerコンテナの再ビルドと再起動を自動的に実行します。ユーザーからの明示的な指示は不要です。
 
 ## 最近の変更
 

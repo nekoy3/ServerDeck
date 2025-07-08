@@ -58,6 +58,11 @@
                                 {% endfor %}
                             </div>
                             {% endif %}
+                            {% if server.type == 'ssh' %}
+                            <div class="mt-2">
+                                <a href="/ssh/{{ server.id }}" class="btn btn-primary btn-sm">SSH接続</a>
+                            </div>
+                            {% endif %}
                         </div>
                     </div>
                 </div>

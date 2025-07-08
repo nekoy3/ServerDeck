@@ -1,5 +1,5 @@
 <div class="container-fluid">
-    <h1 class="mb-4">サーバー設定</h1>
+    <h1 class="mb-4">サーバー設定 <button class="btn btn-secondary btn-sm ms-3" id="manageSshKeysBtn">SSHキー管理</button></h1>
     <div class="row" id="server-list">
         <!-- Server cards will be loaded here by JavaScript -->
     </div>
@@ -55,9 +55,11 @@
                         <label for="serverPassword" class="form-label">パスワード</label>
                         <input type="password" class="form-control" id="serverPassword" name="password">
                     </div>
-                    <div class="mb-3" id="sshKeyPathGroup">
-                        <label for="serverSshKeyPath" class="form-label">SSHキーパス</label>
-                        <input type="text" class="form-control" id="serverSshKeyPath" name="ssh_key_path">
+                    <div class="mb-3" id="sshKeySelectGroup">
+                        <label for="serverSshKeyId" class="form-label">SSHキー</label>
+                        <select class="form-select" id="serverSshKeyId" name="ssh_key_id">
+                            <!-- SSH keys will be loaded here by JavaScript -->
+                        </select>
                     </div>
                     <div class="mb-3">
                         <label for="serverDescription" class="form-label">説明</label>
@@ -68,6 +70,45 @@
                         <input type="text" class="form-control" id="serverTags" name="tags">
                     </div>
                     <button type="submit" class="btn btn-primary">変更を保存</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- SSH Key Management Modal -->
+<div class="modal fade" id="sshKeyModal" tabindex="-1" aria-labelledby="sshKeyModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="sshKeyModalLabel">SSHキー管理</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <button class="btn btn-success" id="addSshKeyBtn">新しいSSHキーを追加</button>
+                </div>
+                <div id="sshKeyList" class="list-group mb-4">
+                    <!-- SSH keys will be loaded here -->
+                </div>
+
+                <h4>SSHキーの追加/編集</h4>
+                <form id="sshKeyForm">
+                    <input type="hidden" id="sshKeyId" name="id">
+                    <div class="mb-3">
+                        <label for="sshKeyName" class="form-label">名前</label>
+                        <input type="text" class="form-control" id="sshKeyName" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="sshKeyPath" class="form-label">パス</label>
+                        <input type="text" class="form-control" id="sshKeyPath" name="path">
+                    </div>
+                    <div class="mb-3">
+                        <label for="sshKeyFile" class="form-label">またはファイルをアップロード</label>
+                        <input type="file" class="form-control" id="sshKeyFile" name="file">
+                    </div>
+                    <button type="submit" class="btn btn-primary">保存</button>
+                    <button type="button" class="btn btn-secondary" id="cancelSshKeyEditBtn" style="display:none;">キャンセル</button>
                 </form>
             </div>
         </div>
