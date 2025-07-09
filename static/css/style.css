@@ -1,6 +1,35 @@
+/* Define CSS variables for colors */
+:root {
+    --body-bg: #f8f9fa;
+    --card-bg: #ffffff;
+    --card-border: #e0e0e0;
+    --text-color-primary: #343a40;
+    --text-color-secondary: #6c757d;
+    --footer-bg: #f8f9fa;
+    --footer-border: #e0e0e0;
+    --add-card-border: #cccccc;
+    --add-card-hover-bg: #e9ecef;
+    --add-card-icon-color: #6c757d;
+}
+
+/* Dark theme variables */
+.dark-theme {
+    --body-bg: #212529; /* Dark background */
+    --card-bg: #343a40; /* Darker card background */
+    --card-border: #495057; /* Darker border */
+    --text-color-primary: #f8f9fa; /* Light text */
+    --text-color-secondary: #ced4da; /* Lighter secondary text */
+    --footer-bg: #343a40; /* Darker footer */
+    --footer-border: #495057; /* Darker footer border */
+    --add-card-border: #495057;
+    --add-card-hover-bg: #495057;
+    --add-card-icon-color: #ced4da;
+}
+
 body {
-    background-color: #f8f9fa;
+    background-color: var(--body-bg);
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    color: var(--text-color-primary); /* Apply text color to body */
 }
 
 .container {
@@ -8,19 +37,19 @@ body {
 }
 
 .server-card {
-    background-color: #ffffff;
-    border: 1px solid #e0e0e0;
+    background-color: var(--card-bg);
+    border: 1px solid var(--card-border);
     border-radius: 8px;
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
     transition: transform 0.3s ease, box-shadow 0.3s ease;
     cursor: pointer;
     margin-bottom: 20px;
-    overflow: hidden; /* Ensure no overflow for animations */
+    overflow: hidden;
 }
 
 .server-card:hover {
-    transform: translateY(-5px); /* Lift effect */
-    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2); /* Stronger shadow */
+    transform: translateY(-5px);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
 }
 
 .server-card-body {
@@ -30,13 +59,13 @@ body {
 .server-card-title {
     font-size: 1.5rem;
     font-weight: bold;
-    color: #343a40;
+    color: var(--text-color-primary);
     margin-bottom: 10px;
 }
 
 .server-card-text {
     font-size: 0.9rem;
-    color: #6c757d;
+    color: var(--text-color-secondary);
     margin-bottom: 5px;
 }
 
@@ -49,7 +78,7 @@ body {
 .server-card-icon {
     font-size: 2rem;
     margin-right: 15px;
-    color: #007bff; /* Default blue */
+    color: #007bff; /* Default blue - keep as is for now, or define a variable if needed */
 }
 
 .server-card-icon.ssh {
@@ -66,22 +95,22 @@ body {
 
 /* Config Page Specific Styles */
 .add-server-card {
-    border: 2px dashed #cccccc;
+    border: 2px dashed var(--add-card-border);
     display: flex;
     justify-content: center;
     align-items: center;
-    min-height: 150px; /* Adjust as needed */
+    min-height: 150px;
     cursor: pointer;
     transition: background-color 0.3s ease;
 }
 
 .add-server-card:hover {
-    background-color: #e9ecef;
+    background-color: var(--add-card-hover-bg);
 }
 
 .add-server-card .fa-plus-circle {
     font-size: 3rem;
-    color: #6c757d;
+    color: var(--add-card-icon-color);
 }
 
 .config-server-card .card-body {
@@ -92,10 +121,89 @@ body {
 }
 
 .config-server-card .card-footer {
-    background-color: #f8f9fa;
-    border-top: 1px solid #e0e0e0;
+    background-color: var(--footer-bg);
+    border-top: 1px solid var(--footer-border);
     padding: 10px 20px;
     display: flex;
     justify-content: flex-end;
     gap: 10px;
+}
+
+/* Adjust Bootstrap navbar for dark theme */
+.dark-theme .navbar {
+    background-color: var(--card-bg) !important; /* Use card-bg for navbar in dark theme */
+}
+
+.dark-theme .navbar-brand,
+.dark-theme .nav-link,
+.dark-theme .dropdown-toggle {
+    color: var(--text-color-primary) !important;
+}
+
+.dark-theme .dropdown-menu {
+    background-color: var(--card-bg);
+    border: 1px solid var(--card-border);
+}
+
+.dark-theme .dropdown-item {
+    color: var(--text-color-primary);
+}
+
+.dark-theme .dropdown-item:hover {
+    background-color: var(--footer-border);
+}
+
+/* Adjust Bootstrap modal for dark theme */
+.dark-theme .modal-content {
+    background-color: var(--card-bg);
+    color: var(--text-color-primary);
+}
+
+.dark-theme .modal-header,
+.dark-theme .modal-footer {
+    background-color: var(--footer-bg);
+    border-color: var(--footer-border);
+}
+
+.dark-theme .modal-title {
+    color: var(--text-color-primary);
+}
+
+.dark-theme .btn-close {
+    filter: invert(1); /* Invert close button color for dark theme */
+}
+
+/* Adjust form elements for dark theme */
+.dark-theme .form-control,
+.dark-theme .form-select {
+    background-color: var(--footer-border);
+    color: var(--text-color-primary);
+    border-color: var(--card-border);
+}
+
+.dark-theme .form-control::placeholder {
+    color: var(--text-color-secondary);
+}
+
+.dark-theme .form-control:focus,
+.dark-theme .form-select:focus {
+    background-color: var(--footer-border);
+    color: var(--text-color-primary);
+    border-color: #0d6efd; /* Bootstrap primary blue */
+    box-shadow: 0 0 0 0.25rem rgba(49, 132, 253, 0.25);
+}
+
+.dark-theme .list-group-item {
+    background-color: var(--card-bg);
+    color: var(--text-color-primary);
+    border-color: var(--card-border);
+}
+
+.dark-theme .text-muted {
+    color: var(--text-color-secondary) !important;
+}
+
+.dark-theme .badge.bg-secondary {
+    background-color: var(--footer-border) !important;
+    color: var(--text-color-primary) !important;
 }

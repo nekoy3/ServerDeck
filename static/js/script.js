@@ -2,6 +2,34 @@ document.addEventListener('DOMContentLoaded', function() {
     const configLink = document.getElementById('configLink');
     const configModal = new bootstrap.Modal(document.getElementById('configModal'));
     const configModalBody = document.getElementById('configModalBody');
+    const themeBody = document.getElementById('theme-body'); // Get the body element
+    const darkModeToggle = document.getElementById('darkModeToggle'); // Get the toggle switch
+
+    // Function to apply the theme
+    function applyTheme(theme) {
+        if (theme === 'dark') {
+            themeBody.classList.add('dark-theme');
+            darkModeToggle.checked = true;
+        } else {
+            themeBody.classList.remove('dark-theme');
+            darkModeToggle.checked = false;
+        }
+    }
+
+    // Load saved theme from localStorage or default to light
+    const savedTheme = localStorage.getItem('theme') || 'light';
+    applyTheme(savedTheme);
+
+    // Event listener for theme toggle switch
+    darkModeToggle.addEventListener('change', function() {
+        if (this.checked) {
+            applyTheme('dark');
+            localStorage.setItem('theme', 'dark');
+        } else {
+            applyTheme('light');
+            localStorage.setItem('theme', 'light');
+        }
+    });
 
     // Function to initialize config page logic after content is loaded
     function initializeConfigPageLogic() {
@@ -459,7 +487,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             // Generate a unique ID for new SSH keys if not provided
             if (!editingSshKeyId && !keyData.id) {
-                keyData.id = `sshkey-${Date.now()}`; // Simple unique ID
+                keyData.id = `sshkey-${Date.now()}`;
             }
 
             const method = editingSshKeyId ? 'PUT' : 'POST';

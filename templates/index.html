@@ -11,7 +11,7 @@
     <!-- Custom CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
-<body>
+<body id="theme-body">
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
         <div class="container-fluid">
             <a class="navbar-brand" href="/">ServerDeck</a>
@@ -25,6 +25,12 @@
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="#" id="configLink">設定</a>
+                    </li>
+                    <li class="nav-item d-flex align-items-center ms-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="darkModeToggle">
+                            <label class="form-check-label text-light" for="darkModeToggle">ダークモード</label>
+                        </div>
                     </li>
                     {% if session.username %}
                     <li class="nav-item dropdown">
@@ -42,7 +48,7 @@
     </nav>
 
     <div class="container">
-        <h1 class="mb-4">あなたのサーバーとサービス</h1>
+        <h1 class="mb-4">Your Servers and Services</h1>
         <div class="row">
             {% for server in servers %}
             <div class="col-md-4">
