@@ -1,3 +1,5 @@
+import sys
+import logging
 from flask import Flask, render_template, request, jsonify, session
 from flask_socketio import SocketIO, emit
 import yaml
@@ -11,26 +13,30 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your_secret_key_here' # Replace with a strong secret key
 socketio = SocketIO(app)
 
+# Configure basic logging for app
+app.logger.setLevel(logging.DEBUG)
+handler = logging.StreamHandler(sys.stdout) # Explicitly use sys.stdout
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+handler.setFormatter(formatter)
+app.logger.addHandler(handler)
+
+# Configure paramiko logger
+paramiko_logger = logging.getLogger("paramiko")
+paramiko_logger.setLevel(logging.DEBUG)
+paramiko_logger.addHandler(handler)
+
 CONFIG_DIR = os.path.join(os.path.dirname(__file__), 'config')
 SERVERS_CONFIG_PATH = os.path.join(CONFIG_DIR, 'servers.yaml')
 SSH_KEYS_CONFIG_PATH = os.path.join(CONFIG_DIR, 'ssh_keys.yaml')
 
 UPLOAD_FOLDER = os.path.join(CONFIG_DIR, 'uploaded_ssh_keys')
-ALLOWED_EXTENSIONS = {'pem', 'key', 'id_rsa', 'id_dsa', 'id_ecdsa', 'id_ed25519', 'id_vm_machines'} # Common SSH key extensions and custom ones
 
 # Ensure upload folder exists
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 active_ssh_sessions = {} # Store active SSH client sessions
 
-def allowed_file(filename):
-    # If there's no dot in the filename, it's considered a file without an extension
-    # and is allowed if its base name is in ALLOWED_EXTENSIONS (e.g., 'id_rsa')
-    if '.' not in filename:
-        return filename.lower() in ALLOWED_EXTENSIONS
-    
-    # Otherwise, check the extension
-    return filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
 
 def load_servers_config():
     if os.path.exists(SERVERS_CONFIG_PATH):
@@ -180,14 +186,37 @@ def upload_ssh_key_file():
     file = request.files['file']
     if file.filename == '':
         return jsonify({'error': 'No selected file'}), 400
-    if file and allowed_file(file.filename):
-        filename = secure_filename(file.filename)
-        filepath = os.path.join(UPLOAD_FOLDER, filename)
-        file.save(filepath)
-        # Set appropriate permissions for the private key
-        os.chmod(filepath, 0o600) # Read/write for owner only
+    filename = secure_filename(file.filename)
+    filepath = os.path.join(UPLOAD_FOLDER, filename)
+
+    file.save(filepath)
+    os.chmod(filepath, 0o600) # Set appropriate permissions
+
+    # Validate if it's a valid SSH private key
+    try:
+        # Try loading as RSA key (most common)
+        paramiko.RSAKey.from_private_key_file(filepath)
         return jsonify({'path': filepath}), 200
-    return jsonify({'error': 'File type not allowed'}), 400
+    except paramiko.PasswordRequiredException:
+        os.remove(filepath) # Delete the uploaded file
+        return jsonify({'error': 'SSH key requires a passphrase. Passphrase input is not yet supported.'}), 400
+    except paramiko.SSHException as e:
+        # Try loading as EdDSA key (for ed25519)
+        try:
+            paramiko.EdDSAKey.from_private_key_file(filepath)
+            return jsonify({'path': filepath}), 200
+        except paramiko.PasswordRequiredException:
+            os.remove(filepath)
+            return jsonify({'error': 'SSH key requires a passphrase. Passphrase input is not yet supported.'}), 400
+        except paramiko.SSHException as eddsa_e:
+            os.remove(filepath)
+            return jsonify({'error': f'Invalid SSH key format or content: {e} (RSA) / {eddsa_e} (EdDSA)'}), 400
+        except Exception as other_e:
+            os.remove(filepath)
+            return jsonify({'error': f'Failed to process SSH key (EdDSA check): {other_e}'}), 400
+    except Exception as e:
+        os.remove(filepath)
+        return jsonify({'error': f'Failed to process SSH key: {e}'}), 400
 
 def _ssh_read_loop(chan, sid):
     while True:
@@ -196,20 +225,27 @@ def _ssh_read_loop(chan, sid):
             socketio.emit('ssh_output', {'output': output}, room=sid)
         time.sleep(0.01) # Small delay to prevent busy-waiting
 
+@socketio.on('connect')
+def handle_connect():
+    app.logger.debug(f"Client connected! SID: {request.sid}")
+
 @socketio.on('start_ssh')
 def handle_start_ssh(data):
+    app.logger.debug(f"Received start_ssh event. Data: {data}, SID: {request.sid}")
     server_id = data.get('server_id')
     sid = request.sid
-    print(f"Attempting to start SSH for server_id: {server_id} (SID: {sid})")
+    app.logger.debug(f"Attempting to start SSH for server_id: {server_id} (SID: {sid})")
 
     config = load_servers_config()
     server_info = next((s for s in config.get('servers', []) if s['id'] == server_id), None)
 
     if not server_info:
+        app.logger.debug(f"Server '{server_id}' not found.")
         emit('ssh_output', {'output': f"Error: Server '{server_id}' not found in configuration.\r\n"})
         return
 
     if server_info.get('type') != 'ssh':
+        app.logger.debug(f"Server '{server_id}' is not an SSH type server.")
         emit('ssh_output', {'output': f"Error: Server '{server_id}' is not an SSH type server.\r\n"})
         return
 
@@ -227,18 +263,43 @@ def handle_start_ssh(data):
         if ssh_key_id:
             ssh_keys_config = load_ssh_keys_config()
             ssh_key_info = next((k for k in ssh_keys_config.get('ssh_keys', []) if k['id'] == ssh_key_id), None)
+            app.logger.debug(f"Attempting to load key '{ssh_key_id}' with info: {ssh_key_info}")
             if ssh_key_info and os.path.exists(os.path.expanduser(ssh_key_info['path'])):
-                key = paramiko.RSAKey.from_private_key_file(os.path.expanduser(ssh_key_info['path']))
-                client.connect(hostname=hostname, port=port, username=username, pkey=key, timeout=10)
-                print(f"SSH connected to {hostname} using key: {ssh_key_info['name']}")
+                try:
+                    key_path_expanded = os.path.expanduser(ssh_key_info['path'])
+                    app.logger.debug(f"Expanded key path: {key_path_expanded}")
+                    key = paramiko.RSAKey.from_private_key_file(key_path_expanded)
+                    client.connect(
+                        hostname=hostname,
+                        port=port,
+                        username=username,
+                        pkey=key,
+                        timeout=10,
+                        look_for_keys=False,  # Disable searching for local SSH agent keys
+                        allow_agent=False     # Disable using SSH agent
+                    )
+                    app.logger.debug(f"SSH connected to {hostname} using key: {ssh_key_info['name']}")
+                except paramiko.PasswordRequiredException:
+                    app.logger.debug(f"Key '{ssh_key_info['name']}' requires passphrase.")
+                    emit('ssh_output', {'output': f"Error: SSH Key '{ssh_key_info['name']}' requires a passphrase.\r\n"})
+                    client.close()
+                    return
+                except Exception as e:
+                    app.logger.debug(f"Error loading SSH Key '{ssh_key_info['name']}': {e}")
+                    emit('ssh_output', {'output': f"Error loading SSH Key '{ssh_key_info['name']}': {e}\r\n"})
+                    client.close()
+                    return
             else:
+                app.logger.debug(f"SSH Key '{ssh_key_id}' not found or path invalid (info: {ssh_key_info}).")
                 emit('ssh_output', {'output': f"Error: SSH Key '{ssh_key_id}' not found or path invalid.\r\n"})
                 client.close()
                 return
         elif password:
+            app.logger.debug(f"Attempting password authentication for {hostname}")
             client.connect(hostname=hostname, port=port, username=username, password=password, timeout=10)
-            print(f"SSH connected to {hostname} using password.")
+            app.logger.debug(f"SSH connected to {hostname} using password.")
         else:
+            app.logger.debug(f"No valid authentication method provided.")
             emit('ssh_output', {'output': "Error: No valid authentication method (password or SSH key) provided.\r\n"})
             client.close()
             return
@@ -253,10 +314,13 @@ def handle_start_ssh(data):
         threading.Thread(target=_ssh_read_loop, args=(chan, sid), daemon=True).start()
 
     except paramiko.AuthenticationException:
+        app.logger.debug(f"Authentication failed for {hostname}.")
         emit('ssh_output', {'output': "Authentication failed. Please check your credentials.\r\n"})
     except paramiko.SSHException as e:
+        app.logger.debug(f"SSH error for {hostname}: {e}")
         emit('ssh_output', {'output': f"SSH error: {e}\r\n"})
     except Exception as e:
+        app.logger.debug(f"General connection error for {hostname}: {e}")
         emit('ssh_output', {'output': f"Connection error: {e}\r\n"})
 
 @socketio.on('ssh_input')
@@ -278,12 +342,12 @@ def handle_resize_terminal(data):
 @socketio.on('disconnect')
 def handle_disconnect():
     sid = request.sid
-    print(f"Client disconnected (SID: {sid})")
+    app.logger.debug(f"Client disconnected (SID: {sid})")
     if sid in active_ssh_sessions:
         client = active_ssh_sessions[sid]['client']
         client.close()
         del active_ssh_sessions[sid]
-        print(f"SSH session closed for SID: {sid}")
+        app.logger.debug(f"SSH session closed for SID: {sid}")
 
 if __name__ == '__main__':
     socketio.run(app, host='0.0.0.0', debug=True, allow_unsafe_werkzeug=True, port=5001)

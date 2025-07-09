@@ -1,51 +1,74 @@
 servers:
-  # SSH接続するサーバーの例
-  - id: home_server
-    name: My Home Server
-    type: ssh # タイプを 'ssh' に設定
-    host: 192.168.1.100
-    port: 22
-    username: admin
-    auth_method: password # または 'key'
-    password: your_password # 環境変数など推奨
-    ssh_key_path: ~/.ssh/id_rsa
-    description: メインのファイルサーバー
-    tags: [home, storage]
-
-  # URLでアクセスするサービスの例
-  - id: grafana_dashboard
-    name: Grafana Dashboard
-    type: url # タイプを 'url' に設定
-    url: http://192.168.1.200:3000
-    description: 監視ダッシュボード
-    tags: [monitoring, dashboard]
-
-  - id: router_web_ui
-    name: Router Web UI
-    type: url
-    url: https://192.168.1.1
-    description: ルーターの管理画面
-    tags: [network, admin]
-
-  # ネットワーク機器（SSHでログイン）の例
-  - id: core_switch
-    name: Core Switch
-    type: network_device # タイプを 'network_device' に設定
-    host: 192.168.1.254
-    port: 22
-    username: admin
-    auth_method: password
-    password: switch_password
-    description: コアネットワークスイッチ
-    tags: [network, switch]
-
-  - id: access_point
-    name: Wireless AP
-    type: network_device
-    host: 192.168.1.253
-    port: 22
-    username: ap_admin
-    auth_method: key
-    ssh_key_path: ~/.ssh/id_ap
-    description: 無線LANアクセスポイント
-    tags: [network, wireless]
+- id: home_server
+  name: My Home Server
+  type: ssh
+  host: 192.168.1.100
+  port: 22
+  username: admin
+  auth_method: password
+  password: your_password
+  ssh_key_path: ~/.ssh/id_rsa
+  description: "\u30E1\u30A4\u30F3\u306E\u30D5\u30A1\u30A4\u30EB\u30B5\u30FC\u30D0\
+    \u30FC"
+  tags:
+  - home
+  - storage
+- id: grafana_dashboard
+  name: Grafana Dashboard
+  type: url
+  url: http://192.168.1.200:3000
+  description: "\u76E3\u8996\u30C0\u30C3\u30B7\u30E5\u30DC\u30FC\u30C9"
+  tags:
+  - monitoring
+  - dashboard
+- id: router_web_ui
+  name: Router Web UI
+  type: url
+  url: https://192.168.1.1
+  description: "\u30EB\u30FC\u30BF\u30FC\u306E\u7BA1\u7406\u753B\u9762"
+  tags:
+  - network
+  - admin
+- id: core_switch
+  name: Core Switch
+  type: network_device
+  host: 192.168.1.254
+  port: 22
+  username: admin
+  auth_method: password
+  password: switch_password
+  description: "\u30B3\u30A2\u30CD\u30C3\u30C8\u30EF\u30FC\u30AF\u30B9\u30A4\u30C3\
+    \u30C1"
+  tags:
+  - network
+  - switch
+- id: access_point
+  name: Wireless AP
+  type: network_device
+  host: 192.168.1.253
+  port: 22
+  username: ap_admin
+  auth_method: key
+  ssh_key_path: ~/.ssh/id_ap
+  description: "\u7121\u7DDALAN\u30A2\u30AF\u30BB\u30B9\u30DD\u30A4\u30F3\u30C8"
+  tags:
+  - network
+  - wireless
+- id: ''
+  name: pve01
+  type: ssh
+  port: 22
+  auth_method: password
+- id: server-1751995193436
+  name: pve01
+  type: ssh
+  port: 22
+  auth_method: key
+  host: pve01.mynk.home
+  username: root
+  ssh_key_id: sshkey-1752037855549
+- id: server-1751995236618
+  name: "\u3063k"
+  type: ssh
+  port: 22
+  auth_method: password

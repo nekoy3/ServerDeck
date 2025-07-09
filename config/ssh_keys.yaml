@@ -1,1 +1,10 @@
-ssh_keys: []
+ssh_keys:
+- id: sshkey-1752033882351
+  name: id_vm_machines
+  path: /app/config/uploaded_ssh_keys/id_vm_machines
+- id: sshkey-1752036203270
+  name: new_rsa_key
+  path: /app/config/uploaded_ssh_keys/new_rsa_key
+- id: sshkey-1752037855549
+  name: new_rsa2
+  path: /app/config/uploaded_ssh_keys/new_rsa_key_sha2

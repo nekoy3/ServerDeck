@@ -31,3 +31,12 @@ thumbs.db
 # Ignore actual config files, use .template files for version control
 config/servers.yaml
 config/ssh_keys.yaml
+
+# Ignore uploaded SSH keys and generated local keys
+config/uploaded_ssh_keys/
+new_rsa_key
+new_rsa_key.pub
+new_rsa_key_sha2
+new_rsa_key_sha2.pub
+id_vm_machines
+id_vm_machines.pub

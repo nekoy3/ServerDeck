@@ -247,9 +247,13 @@ document.addEventListener('DOMContentLoaded', function() {
             const formData = new FormData(serverForm);
             const serverData = {};
 
-            // Generate a unique ID for new servers if not provided
-            if (!editingServerId && !serverIdInput.value) {
-                serverData.id = `server-${Date.now()}`; // Simple unique ID based on timestamp
+            // Ensure ID is correctly set for both new and existing servers
+            if (editingServerId) {
+                serverData.id = editingServerId;
+            } else if (serverIdInput.value) {
+                serverData.id = serverIdInput.value;
+            } else {
+                serverData.id = `server-${Date.now()}`;
             }
 
             for (let [key, value] of formData.entries()) {
@@ -257,7 +261,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     serverData[key] = value.split(',').map(tag => tag.trim()).filter(tag => tag !== '');
                 } else if (key === 'port') {
                     serverData[key] = parseInt(value, 10);
-                } else {
+                } else if (key !== 'id') { // Exclude 'id' as it's handled above
                     serverData[key] = value;
                 }
             }
@@ -414,6 +418,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 return; // Stop submission
             }
 
+            let finalKeyPath = ''; // Variable to hold the determined path
+
             // If a file is selected, upload it first
             if (sshKeyFileInput.files.length > 0) {
                 const file = sshKeyFileInput.files[0];
@@ -428,7 +434,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
                     if (uploadResponse.ok) {
                         const uploadResult = await uploadResponse.json();
-                        keyData.path = uploadResult.path; // Set the path from the upload response
+                        finalKeyPath = uploadResult.path; // Set the path from the upload response
                     } else {
                         const errorData = await uploadResponse.json();
                         alert(`ファイルのアップロードに失敗しました: ${errorData.error || uploadResponse.statusText}`);
@@ -440,14 +446,16 @@ document.addEventListener('DOMContentLoaded', function() {
                     return; // Stop submission if upload fails
                 }
             } else if (sshKeyPathInput.value) {
-                keyData.path = sshKeyPathInput.value;
+                finalKeyPath = sshKeyPathInput.value; // Set from input field
             }
 
+            // Now, populate keyData with other form entries, but ensure 'path' is set from finalKeyPath
             for (let [key, value] of formData.entries()) {
-                if (key !== 'file') { // Exclude the file input from direct form data processing
+                if (key !== 'file' && key !== 'path') { // Exclude 'file' and 'path' from direct form data processing
                     keyData[key] = value;
                 }
             }
+            keyData.path = finalKeyPath; // Explicitly set the path
 
             // Generate a unique ID for new SSH keys if not provided
             if (!editingSshKeyId && !keyData.id) {
