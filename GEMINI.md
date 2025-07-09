@@ -24,6 +24,17 @@ ServerDeck
 2.  **リポジトリのクローン**: `git clone [リポジトリURL]` でプロジェクトをローカルにクローンします。
 3.  **Dockerコンテナの起動**: 「Dockerを使用した初期セットアップと実行」セクションの手順に従って、アプリケーションコンテナを起動します。
 
+### Python環境に関する注意事項
+
+`user_management.py`のようなスクリプトをホストマシン上で直接実行する場合、`venv`などの仮想環境を利用することが推奨されます。
+
+ライブラリをインストールする際は、`pip install`の代わりに`python3 -m pip install`を使用してください。これにより、システムに複数のPythonバージョンが存在する場合でも、意図した`python3`に関連付けられた`pip`が使用されることが保証され、依存関係の問題を回避できます。
+
+例:
+```bash
+python3 -m pip install -r requirements.txt
+```
+
 ## ビルド、テスト、Lintコマンド
 
 ### ビルド
@@ -156,9 +167,9 @@ SSH秘密鍵をDockerイメージに直接含めることは、セキュリテ�
 
 3.  **Dockerコンテナの実行:**
     ```bash
-    docker run -d -p 5001:5001 
-      -v /path/to/your/ServerDeck/config:/app/config 
-      -v /path/to/your/ServerDeck/uploaded_ssh_keys:/app/config/uploaded_ssh_keys 
+    docker run -d -p 5001:5001 \
+      -v /path/to/your/ServerDeck/config:/app/config \
+      -v /path/to/your/ServerDeck/uploaded_ssh_keys:/app/config/uploaded_ssh_keys \
       --name serverdeck-container serverdeck-app
     ```
     このコマンドは、`serverdeck-app`イメージをデタッチモード(`-d`)で実行し、ホストのポート5001をコンテナのポート5001にマッピング(`-p 5001:5001`)し、ホストの`config`ディレクトリと`uploaded_ssh_keys`ディレクトリをコンテナにマウントします。コンテナに`serverdeck-container`という名前を付けます。
@@ -240,3 +251,22 @@ echo "ServerDeck application restarted. Access at http://127.0.0.1:5001/"
 - `templates/index.html`: Bootstrapモーダル構造が追加され、「Config」リンクがモーダルをトリガーするように更新されました。
 - `templates/config_modal_content.html`: モーダルに読み込まれるように設計された、設定ページの実際のコンテンツを含む新しいファイルです。
 - `static/js/script.js`: モーダルへの設定コンテンツの動的読み込みと、読み込まれたコンテンツのJavaScriptロジックの再初期化を処理するように更新されました。
+
+### 認証機能の導入とユーザー管理
+
+アプリケーションに認証機能が導入されました。これにより、登録されたユーザーのみがServerDeckにアクセスできます。
+
+#### 初回ユーザーの作成
+
+アプリケーションを初めて利用する前、または新しいユーザーを追加するには、以下の手順を実行する必要があります。
+
+1.  **ターミナルで`ServerDeck`ディレクトリに移動します。**
+2.  **以下のコマンドを実行します。**
+    ```bash
+    python3 user_management.py adduser
+    ```
+3.  **対話形式でユーザー名とパスワードを設定します。**
+
+**重要**: このコマンドはパスワード入力など対話的な操作を必要とするため、**開発者自身がターミナルで直接実行する必要があります。** エージェント（Gemini）はこのコマンドを実行できません。
+
+ユーザー作成後、コンテナを再起動するとログインページが表示されます。

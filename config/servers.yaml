@@ -66,7 +66,7 @@ servers:
   auth_method: key
   host: pve01.mynk.home
   username: root
-  ssh_key_id: sshkey-1752037855549
+  ssh_key_id: sshkey-1752048252175
 - id: server-1751995236618
   name: "\u3063k"
   type: ssh

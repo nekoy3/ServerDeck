@@ -1,4 +1,4 @@
-FROM python:3.9-slim-buster
+FROM python:3.9-buster
 
 WORKDIR /app
 
@@ -8,7 +8,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip uninstall -y paramiko cryptography && pip cache purge && pip install --no-cache-dir --upgrade -r requirements.txt
 
 # Install Node.js and npm for xterm.js
 RUN apt-get update && apt-get install -y --no-install-recommends \
