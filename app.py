@@ -7,6 +7,8 @@ import os
 import paramiko
 import threading
 import time
+import subprocess # Added
+import sys
 from werkzeug.utils import secure_filename
 from werkzeug.security import check_password_hash
 from functools import wraps
@@ -16,6 +18,34 @@ app = Flask(__name__)
 # and load it from an environment variable or a secure configuration file.
 app.config['SECRET_KEY'] = os.urandom(24)
 socketio = SocketIO(app)
+
+# --- Ping Utility ---
+def ping_host(host, count=1, timeout=1):
+    """
+    Pings a host and returns True if successful, False otherwise.
+    Uses 'ping -c 1 -W 1' for Linux/macOS and 'ping -n 1 -w 1000' for Windows.
+    """
+    param = '-n' if sys.platform.startswith('win') else '-c'
+    command = ['ping', param, str(count), '-W' if sys.platform != 'win32' else '-w', str(timeout * 1000 if sys.platform.startswith('win') else timeout), host]
+    try:
+        # Use subprocess.run for Python 3.5+
+        result = subprocess.run(command, capture_output=True, text=True, timeout=timeout + 1)
+        # Check return code and stdout/stderr for success
+        if result.returncode == 0:
+            return 'online'
+        else:
+            # Ping command failed (e.g., host unreachable, 100% packet loss)
+            app.logger.debug(f"Ping failed for {host}: {result.stderr.strip()}")
+            return 'offline'
+    except subprocess.TimeoutExpired:
+        app.logger.debug(f"Ping timed out for {host}")
+        return 'offline'
+    except FileNotFoundError:
+        app.logger.error("Ping command not found. Please ensure ping is installed and in your PATH.")
+        return 'unknown'
+    except Exception as e:
+        app.logger.error(f"An error occurred during ping for {host}: {e}")
+        return 'unknown'
 
 # --- Logging Configuration ---
 app.logger.setLevel(logging.DEBUG)
@@ -173,6 +203,21 @@ def delete_server(server_id):
     config['servers'] = servers
     save_servers_config(config)
     return jsonify({"message": "Server deleted"}), 204
+
+@app.route('/api/ping_status/<server_id>', methods=['GET'])
+@login_required
+def get_ping_status(server_id):
+    config = load_servers_config()
+    server = next((s for s in config.get('servers', []) if s['id'] == server_id), None)
+    if not server:
+        return jsonify({"error": "Server not found"}), 404
+
+    host = server.get('host')
+    if not host:
+        return jsonify({"status": "n/a", "message": "Host information not available for ping"}), 200
+
+    status = ping_host(host)
+    return jsonify({"status": status}), 200
 
 @app.route('/api/ssh_keys', methods=['GET'])
 @login_required

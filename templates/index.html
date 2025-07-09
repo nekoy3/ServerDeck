@@ -52,7 +52,7 @@
         <div class="row">
             {% for server in servers %}
             <div class="col-md-4">
-                <div class="card server-card">
+                <div class="card server-card" data-server-id="{{ server.id }}">
                     <div class="card-body server-card-body d-flex align-items-center">
                         <i class="server-card-icon fas {% if server.type == 'ssh' %}fa-terminal ssh{% elif server.type == 'url' %}fa-globe url{% elif server.type == 'network_device' %}fa-network-wired network_device{% else %}fa-server{% endif %}"></i>
                         <div>
@@ -74,6 +74,9 @@
                                 {% endfor %}
                             </div>
                             {% endif %}
+                            <div class="d-flex align-items-center mt-2">
+                                <div class="ping-status-box" id="ping-status-{{ server.id }}"></div>
+                            </div>
                             {% if server.type == 'ssh' %}
                             <div class="mt-2">
                                 <a href="/ssh/{{ server.id }}" class="btn btn-primary btn-sm">SSH接続</a>

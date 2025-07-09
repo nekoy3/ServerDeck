@@ -31,6 +31,54 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
+    // --- Ping Status Monitoring ---
+    async function updatePingStatus(serverId) {
+        const pingStatusBox = document.getElementById(`ping-status-${serverId}`);
+
+        if (!pingStatusBox) {
+            return; // Element not found, perhaps server card not rendered yet or removed
+        }
+
+        pingStatusBox.textContent = 'CHECKING';
+        pingStatusBox.className = 'ping-status-box checking'; // Grey for checking
+
+        try {
+            const response = await fetch(`/api/ping_status/${serverId}`);
+            const data = await response.json();
+            const status = data.status;
+
+            if (status === 'online') {
+                pingStatusBox.textContent = 'ONLINE';
+                pingStatusBox.className = 'ping-status-box online';
+            } else if (status === 'offline') {
+                pingStatusBox.textContent = 'OFFLINE';
+                pingStatusBox.className = 'ping-status-box offline';
+            } else {
+                pingStatusBox.textContent = 'N/A';
+                pingStatusBox.className = 'ping-status-box na';
+            }
+        } catch (error) {
+            console.error(`Error fetching ping status for ${serverId}:`, error);
+            pingStatusBox.textContent = 'ERROR';
+            pingStatusBox.className = 'ping-status-box na'; // Use N/A style for error
+        }
+    }
+
+    // Initial ping status update for all servers
+    const serverCards = document.querySelectorAll('.server-card[data-server-id]');
+    serverCards.forEach(card => {
+        const serverId = card.dataset.serverId;
+        updatePingStatus(serverId);
+    });
+
+    // Periodically update ping status (e.g., every 30 seconds)
+    setInterval(() => {
+        document.querySelectorAll('.server-card[data-server-id]').forEach(card => {
+            const serverId = card.dataset.serverId;
+            updatePingStatus(serverId);
+        });
+    }, 30000); // 30 seconds
+
     // Function to initialize config page logic after content is loaded
     function initializeConfigPageLogic() {
         const serverList = document.getElementById('server-list');
@@ -256,10 +304,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Further toggle based on auth method
                 if (serverAuthMethodSelect.value === 'password') {
                     passwordGroup.style.display = 'block';
-                } else {
+                }
+
+                else {
                     sshKeySelectGroup.style.display = 'block'; // Show SSH key select
                 }
-            } else if (type === 'url') {
+            }
+
+            else if (type === 'url') {
                 urlGroup.style.display = 'block';
             }
         }
