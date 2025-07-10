@@ -14,6 +14,8 @@ from werkzeug.security import check_password_hash
 from functools import wraps
 from datetime import datetime
 import shutil
+import requests
+import random
 
 app = Flask(__name__)
 # IMPORTANT: In a production environment, use a strong, randomly generated secret key
@@ -65,6 +67,7 @@ CONFIG_DIR = os.path.join(os.path.dirname(__file__), 'config')
 SERVERS_CONFIG_PATH = os.path.join(CONFIG_DIR, 'servers.yaml')
 SSH_KEYS_CONFIG_PATH = os.path.join(CONFIG_DIR, 'ssh_keys.yaml')
 USERS_CONFIG_PATH = os.path.join(CONFIG_DIR, 'users.yaml')
+EXTRA_IMPORT_CONFIG_PATH = os.path.join(CONFIG_DIR, 'extra_import.yaml')
 UPLOAD_FOLDER = os.path.join(CONFIG_DIR, 'uploaded_ssh_keys')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True);
 
@@ -138,6 +141,23 @@ def load_users_config():
             return yaml.safe_load(f) or {"users": []}
     return {"users": []}
 
+def load_extra_import_config():
+    if os.path.exists(EXTRA_IMPORT_CONFIG_PATH):
+        with open(EXTRA_IMPORT_CONFIG_PATH, 'r') as f:
+            config = yaml.safe_load(f) or {}
+            if "url" not in config:
+                config["url"] = ""
+            if "previous_url" not in config:
+                config["previous_url"] = ""
+            return config
+    return {"url": "", "previous_url": ""}
+
+def save_extra_import_config(config_data):
+    os.makedirs(CONFIG_DIR, exist_ok=True)
+    with open(EXTRA_IMPORT_CONFIG_PATH, 'w') as f:
+        yaml.dump(config_data, f, indent=2, sort_keys=False)
+
+
 # Type display names mapping
 TYPE_DISPLAY_NAMES = {
     'node': 'ノード',
@@ -145,6 +165,83 @@ TYPE_DISPLAY_NAMES = {
     'network_device': 'ネットワークデバイス',
     'kvm': 'KVM',
 }
+
+def run_extra_import():
+    with app.app_context():
+        app.logger.info("Running extra import...")
+        extra_import_config = load_extra_import_config()
+        url = extra_import_config.get('url')
+
+        if not url:
+            app.logger.info("Extra import URL not configured. Skipping.")
+            # If URL is cleared, remove is_extra and is_new/is_deleted flags from all extra servers
+            config = load_servers_config()
+            servers = config.get('servers', [])
+            updated_servers = []
+            for server in servers:
+                if server.get('is_extra'):
+                    server.pop('is_extra', None)
+                    server.pop('is_new', None)
+                    server.pop('is_deleted', None)
+                updated_servers.append(server)
+            config['servers'] = updated_servers
+            save_servers_config(config)
+            return
+
+        try:
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()
+            
+            # The text file contains 'hostname ip' pairs, so we split and take the first part.
+            # Then, remove trailing dot if present.
+            imported_hosts = []
+            for line in response.text.splitlines():
+                stripped_line = line.strip()
+                if stripped_line:
+                    host_part = stripped_line.split()[0] # Take the first part (hostname)
+                    if host_part.endswith('.'):
+                        host_part = host_part[:-1] # Remove trailing dot
+                    imported_hosts.append(host_part)
+
+            config = load_servers_config()
+            servers = config.get('servers', [])
+            existing_hosts = [s.get('host') for s in servers]
+
+            # Add new servers
+            for host in imported_hosts:
+                if host not in existing_hosts:
+                    new_server = {
+                        'id': f"server-{int(time.time() * 1000)}-{random.randint(1000, 9999)}",
+                        'name': host.split('.')[0],
+                        'type': 'node',
+                        'port': 22,
+                        'host': host,
+                        'is_extra': True,
+                        'is_new': True  # Flag for green border
+                    }
+                    servers.append(new_server)
+                    app.logger.info(f"Added new server from extra import: {host}")
+
+            # Mark existing extra servers that are no longer in the import list as deleted
+            for server in servers:
+                if server.get('is_extra') and server.get('host') not in imported_hosts:
+                    server['is_deleted'] = True # Flag for red border
+                    server.pop('is_new', None) # Ensure it's not marked as new if it's deleted
+                    app.logger.info(f"Marked server for deletion from extra import: {server.get('host')}")
+                elif server.get('is_extra') and server.get('host') in imported_hosts:
+                    # If an extra server is still in the list, ensure it's not marked for deletion or new
+                    server.pop('is_deleted', None)
+                    server.pop('is_new', None)
+
+            save_servers_config(config)
+            app.logger.info("Extra import finished.")
+
+        except requests.RequestException as e:
+            app.logger.error(f"Error during extra import: {e}")
+
+def schedule_extra_import():
+    run_extra_import()
+    threading.Timer(300, schedule_extra_import).start()
 
 # --- Authentication ---
 def login_required(f):
@@ -234,7 +331,11 @@ def update_server(server_id):
     found = False
     for i, server in enumerate(servers):
         if server['id'] == server_id:
+            # Merge existing data with updated data
             servers[i] = {**server, **updated_data}
+            # When a server is manually edited, remove the 'new' and 'deleted' flags
+            servers[i].pop('is_new', None)
+            servers[i].pop('is_deleted', None)
             found = True
             break
     if not found:
@@ -254,6 +355,92 @@ def delete_server(server_id):
     config['servers'] = servers
     save_servers_config(config)
     return jsonify({"message": "Server deleted"}), 204
+
+@app.route('/api/extra_import_url', methods=['GET'])
+@login_required
+def get_extra_import_url():
+    config = load_extra_import_config()
+    return jsonify(config)
+
+@app.route('/api/extra_import_url', methods=['POST'])
+@login_required
+def set_extra_import_url():
+    data = request.json
+    new_url = data.get('url', '')
+    
+    extra_import_config = load_extra_import_config()
+    current_url = extra_import_config.get('url', '')
+    previous_url = extra_import_config.get('previous_url', '')
+
+    if new_url != current_url:
+        # URL has changed or been cleared
+        extra_import_config['url'] = new_url
+        extra_import_config['previous_url'] = current_url # Store current as previous
+        save_extra_import_config(extra_import_config)
+
+        # Mark existing is_extra servers for potential deletion/modification
+        config = load_servers_config()
+        servers = config.get('servers', [])
+        affected_servers = []
+        for server in servers:
+            if server.get('is_extra'):
+                server['is_deleted'] = True # Mark for red border
+                server.pop('is_new', None) # Ensure it's not marked as new
+                affected_servers.append(server)
+        save_servers_config(config) # Save the marked state
+
+        if affected_servers:
+            return jsonify({"message": "URL changed. Confirmation needed for existing extra imported servers.", "confirmation_needed": True}), 200
+        else:
+            # No existing extra servers, just run import
+            threading.Thread(target=run_extra_import).start()
+            return jsonify({"message": "URL saved, import started."}), 200
+    else:
+        # URL is the same, just run import if it's not already running
+        threading.Thread(target=run_extra_import).start()
+        return jsonify({"message": "URL is unchanged, import re-triggered."}), 200
+
+
+@app.route('/api/extra_import_url/confirm', methods=['POST'])
+@login_required
+def confirm_extra_import_action():
+    data = request.json
+    action = data.get('action') # 'delete_all', 'keep_all', 'cancel'
+
+    config = load_servers_config()
+    servers = config.get('servers', [])
+    extra_import_config = load_extra_import_config()
+    
+    if action == 'delete_all':
+        # Remove all servers that were marked as is_extra and is_deleted
+        servers = [s for s in servers if not (s.get('is_extra') and s.get('is_deleted'))]
+        app.logger.info("Confirmed: Deleted all extra imported servers marked for deletion.")
+    elif action == 'keep_all':
+        # For servers marked as is_extra and is_deleted, set is_extra to false and remove is_deleted
+        for server in servers:
+            if server.get('is_extra') and server.get('is_deleted'):
+                server['is_extra'] = False
+                server.pop('is_deleted', None)
+                server.pop('is_new', None) # Also remove is_new if it was there
+        app.logger.info("Confirmed: Kept all extra imported servers, removed extra import flag.")
+    elif action == 'cancel':
+        # Revert URL to previous_url and remove is_deleted flags from is_extra servers
+        extra_import_config['url'] = extra_import_config.get('previous_url', '')
+        for server in servers:
+            if server.get('is_extra') and server.get('is_deleted'):
+                server.pop('is_deleted', None)
+                server.pop('is_new', None) # Also remove is_new if it was there
+        app.logger.info("Confirmed: Canceled URL change, reverted to previous URL.")
+    else:
+        return jsonify({"error": "Invalid action specified."}), 400
+
+    save_servers_config(config)
+    save_extra_import_config(extra_import_config) # Save updated extra import config
+
+    # After confirmation, run the extra import again with the (potentially reverted) new URL
+    threading.Thread(target=run_extra_import).start()
+    return jsonify({"message": f"Action '{action}' processed. Extra import re-triggered."}), 200
+
 
 @app.route('/api/ping_status/<server_id>', methods=['GET'])
 @login_required
@@ -362,6 +549,29 @@ def upload_ssh_key_file():
         app.logger.error(f"General Exception (overall): {e}");
         os.remove(filepath);
         return jsonify({'error': f'Failed to process SSH key: {e}'}), 400
+
+@app.route('/api/ssh_keys/bulk_delete', methods=['POST'])
+@login_required
+def bulk_delete_ssh_keys():
+    data = request.json
+    key_ids_to_delete = data.get('ids', [])
+    
+    if not key_ids_to_delete:
+        return jsonify({"error": "No SSH key IDs provided for deletion."}), 400
+
+    config = load_ssh_keys_config()
+    ssh_keys = config.get('ssh_keys', [])
+    original_len = len(ssh_keys)
+    
+    # Filter out keys that are in the deletion list
+    ssh_keys = [k for k in ssh_keys if k['id'] not in key_ids_to_delete]
+    
+    if len(ssh_keys) == original_len:
+        return jsonify({"error": "No matching SSH keys found for deletion."}), 404
+    
+    config['ssh_keys'] = ssh_keys
+    save_ssh_keys_config(config)
+    return jsonify({"message": f"{original_len - len(ssh_keys)} SSH keys deleted."}), 200
 
 # --- Backup API Endpoints ---
 @app.route('/api/backups', methods=['GET'])
@@ -611,4 +821,5 @@ def handle_disconnect():
         app.logger.debug(f"SSH session closed for SID: {sid}");
 
 if __name__ == '__main__':
+    threading.Thread(target=schedule_extra_import, daemon=True).start()
     socketio.run(app, host='0.0.0.0', debug=True, allow_unsafe_werkzeug=True, port=5001);

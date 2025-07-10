@@ -294,11 +294,73 @@ echo "ServerDeck application restarted. Access at http://127.0.0.1:5001/"
 - 登録されたサーバー上の特定のログファイル（例: `/var/log/syslog`, `/var/log/nginx/access.log`）をブラウザ上でリアルタイムに表示できる機能を追加します。
 - ログのフィルタリングや検索機能も提供します。
 
-### 設定の永続化とバックアップ
-- 現在の設定はYAMLファイルに保存されていますが、設定の自動バックアップ機能や、GUIからの設定インポート/エクスポート機能を追加します。
-
-### テーマ/外観のカスタマイズ
-- ライトテーマとダークテーマの切り替え機能や、ユーザーが自由にテーマカラーを設定できる機能を追加します。
-
 ### プラグイン/拡張機能のサポート
 - 将来的に、ユーザーが独自の機能を追加できるようなプラグインシステムを導入します。
+
+### Extra Import機能の追加
+- 設定パネルのタブとして新規に追加
+- これは、ホスト名リストを以下のコマンドで取得し、自動でホストをパネルに追加するものである。
+```bash
+% curl -s "http://ns.mynk.home/mynk_hosts.txt" | awk '{print $1}' 
+aruba01.mynk.home.
+blog.mynk.home.
+box.mynk.home.
+cache.mynk.home.
+db.mynk.home.
+deploy.mynk.home.
+dhcp.mynk.home.
+dns.mynk.home.
+docker.mynk.home.
+gcv.mynk.home.
+go-flow.mynk.home.
+gw.mynk.home.
+haos.mynk.home.
+imm.mynk.home.
+ipmi.mynk.home.
+kibana.mynk.home.
+kuma.mynk.home.
+l2sw-1.mynk.home.
+nas.mynk.home.
+nas-share.mynk.home.
+ns.mynk.home.
+obsrv.mynk.home.
+proxy.mynk.home.
+pve01.mynk.home.
+pve03.mynk.home.
+pve04.mynk.home.
+radius.mynk.home.
+raspi.mynk.home.
+raspi2.mynk.home.
+srv.mynk.home.
+tsvpn.mynk.home.
+ups.mynk.home.
+www.mynk.home.
+```
+- このExtra Import機能は、http://ns.mynk.home/mynk_hosts.txt というURLを登録さえすれば起動時と５分ごとにホスト名をチェックします。
+- これによりメインパネルに自動でホストを追加して欲しいです。例えば、aruba01.mynk.home.の場合、以下のように。
+```yaml
+- id: server-1751995193436 ※idは乱数で振ってね
+  name: aruba01
+  type: node
+  port: 22
+  host: aruba01.mynk.home ※末尾のドットはあった場合削除する。
+  is_extra: True ※下記の処理のためにextra importによって追加されたものか識別するフラグを置く。既存のものは全てFalseとする。
+```
+- 自身が持っていないホスト名がにextra importによって新たに得られた場合、新規で上記のようなconfigでパネルを追加します。そして、**枠を緑色に装飾します**。
+  - 緑色に装飾されたパネルは、クリックするとそのパネルの設定編集画面が出ます。
+  - 編集が完了すると、緑色の装飾は消滅します。
+  - 時間が経過したり、新たにextra importされたホストが追加されたとしても、手動で設定が完了するまでは緑色の装飾が出現したままにします。
+- 自身が持っているホスト名がextra importの時消滅していた場合、**枠を赤色に装飾します**。
+  - 赤色に装飾されたパネルは、クリックすると「extra importから削除しますか？」というダイアログを出す。
+    - OKボタンをクリックされたらパネルを削除する。
+    - キャンセルボタンを押すと、is_extraフラグをFalseにして装飾を削除する。
+- URLの設定方法
+  - URLは設定パネルにタブを追加して、そこで設定できるようにします。最大一つ設定可能で、一度設定すると消すまでは再起動しても維持されます。
+- 追加したホストの名前について
+  - aruba01.mynk.homeというホスト名からaruba01というnameを自動で付けていますが、これはホスト名の最初のドット（.）までを取り出してください。
+- 設定編集画面について
+  緑枠のパネルをクリックして出る設定編集画面は、既存の設定パネルから編集ボタンを押した時の画面を使い回してもらって構いません。
+- 「編集が完了」のタイミング
+  - 「編集が完了すると、緑色の装飾は消滅します」とありますが、設定編集画面で「保存」ボタンが押されたときを完了としてください。
+- 既存サーバーの扱い
+  - この機能を導入するにあたって、今servers.yamlに登録されている全てのサーバーに is_extra: False という設定を追加する必要があります。これは、最初に一度だけ、そちらで編集してください。

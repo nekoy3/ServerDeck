@@ -14,26 +14,32 @@ servers:
     a
 
     a'
+  is_extra: false
 - id: server-1751995236618
   name: "\u3063k"
   type: network_device
   port: 22
   auth_method: password
+  is_extra: false
+  host: "\u3063g"
 - id: server-1752076169048
   name: pve01
   type: virtual_machine
   port: 22
   auth_method: password
+  is_extra: false
 - id: server-1752076183092
   name: pve01
   type: virtual_machine
   port: 22
   auth_method: password
+  is_extra: false
 - id: server-1752076402122
   name: ldsmvoe
   type: network_device
   port: 22
   auth_method: password
+  is_extra: false
 - id: server-1752076413946
   name: ioefw
   type: kvm
@@ -43,13 +49,343 @@ servers:
   username: xx
   password: xx
   description: xxxx
+  is_extra: false
 - id: server-1752116643170
   name: container
   type: kvm
   port: 22
   auth_method: password
+  is_extra: false
 - id: server-1752127940653
   name: "\u3063\u3063\u3063r"
   type: node
   port: 22
   auth_method: password
+  is_extra: false
+- id: server-1752151823363-9883
+  name: aruba01
+  type: node
+  port: 22
+  host: aruba01.mynk.home. 192.168.0.83
+  auth_method: password
+- id: server-1752151823363-8379
+  name: blog
+  type: node
+  port: 22
+  host: blog.mynk.home. 192.168.0.88
+- id: server-1752151823363-9133
+  name: box
+  type: node
+  port: 22
+  host: box.mynk.home. 192.168.0.105
+- id: server-1752151823363-4587
+  name: cache
+  type: node
+  port: 22
+  host: cache.mynk.home. 192.168.0.99
+- id: server-1752151823363-2903
+  name: db
+  type: node
+  port: 22
+  host: db.mynk.home. 192.168.0.84
+- id: server-1752151823363-2045
+  name: deploy
+  type: node
+  port: 22
+  host: deploy.mynk.home. 192.168.0.101
+- id: server-1752151823363-7899
+  name: dhcp
+  type: node
+  port: 22
+  host: dhcp.mynk.home. 192.168.0.89
+- id: server-1752151823363-7869
+  name: dns
+  type: node
+  port: 22
+  host: dns.mynk.home. 192.168.0.53
+- id: server-1752151823363-2385
+  name: docker
+  type: node
+  port: 22
+  host: docker.mynk.home. 192.168.0.108
+- id: server-1752151823363-4424
+  name: gcv
+  type: node
+  port: 22
+  host: gcv.mynk.home. 192.168.0.103
+- id: server-1752151823363-2484
+  name: go-flow
+  type: node
+  port: 22
+  host: go-flow.mynk.home. 192.168.0.95
+- id: server-1752151823363-7123
+  name: gw
+  type: node
+  port: 22
+  host: gw.mynk.home. 192.168.0.1
+- id: server-1752151823363-5648
+  name: haos
+  type: node
+  port: 22
+  host: haos.mynk.home. 192.168.0.98
+- id: server-1752151823363-3044
+  name: imm
+  type: node
+  port: 22
+  host: imm.mynk.home. 192.168.0.200
+- id: server-1752151823363-6663
+  name: ipmi
+  type: node
+  port: 22
+  host: ipmi.mynk.home. 192.168.0.97
+- id: server-1752151823363-2272
+  name: kibana
+  type: node
+  port: 22
+  host: kibana.mynk.home. 192.168.0.82
+- id: server-1752151823363-4274
+  name: kuma
+  type: node
+  port: 22
+  host: kuma.mynk.home. 192.168.0.104
+- id: server-1752151823363-5303
+  name: l2sw-1
+  type: node
+  port: 22
+  host: l2sw-1.mynk.home. 192.168.0.92
+- id: server-1752151823363-6694
+  name: nas
+  type: node
+  port: 22
+  host: nas.mynk.home. 192.168.0.106
+- id: server-1752151823363-1615
+  name: nas-share
+  type: node
+  port: 22
+  host: nas-share.mynk.home. 192.168.0.102
+- id: server-1752151823363-2791
+  name: ns
+  type: node
+  port: 22
+  host: ns.mynk.home. 192.168.0.86
+- id: server-1752151823363-3090
+  name: obsrv
+  type: node
+  port: 22
+  host: obsrv.mynk.home. 192.168.0.81
+- id: server-1752151823363-1124
+  name: proxy
+  type: node
+  port: 22
+  host: proxy.mynk.home. 192.168.0.93
+- id: server-1752151823363-1413
+  name: pve01
+  type: node
+  port: 22
+  host: pve01.mynk.home
+  auth_method: password
+- id: server-1752151823363-4877
+  name: pve03
+  type: node
+  port: 22
+  host: pve03.mynk.home. 192.168.0.96
+- id: server-1752151823363-9276
+  name: pve04
+  type: node
+  port: 22
+  host: pve04.mynk.home. 192.168.0.94
+- id: server-1752151823363-7363
+  name: radius
+  type: node
+  port: 22
+  host: radius.mynk.home. 192.168.0.100
+- id: server-1752151823363-1262
+  name: raspi
+  type: node
+  port: 22
+  host: raspi.mynk.home. 192.168.0.213
+- id: server-1752151823363-9825
+  name: raspi2
+  type: node
+  port: 22
+  host: raspi2.mynk.home. 192.168.0.214
+- id: server-1752151823363-8521
+  name: srv
+  type: node
+  port: 22
+  host: srv.mynk.home. 192.168.0.91
+- id: server-1752151823364-5578
+  name: tsvpn
+  type: node
+  port: 22
+  host: tsvpn.mynk.home. 192.168.0.87
+- id: server-1752151823364-6549
+  name: ups
+  type: node
+  port: 22
+  host: ups.mynk.home. 192.168.0.90
+- id: server-1752151823364-6779
+  name: www
+  type: node
+  port: 22
+  host: www.mynk.home. 192.168.0.85
+- id: server-1752151865030-8343
+  name: aruba01
+  type: node
+  port: 22
+  host: aruba01.mynk.home
+- id: server-1752151865030-9893
+  name: blog
+  type: node
+  port: 22
+  host: blog.mynk.home
+- id: server-1752151865030-9937
+  name: box
+  type: node
+  port: 22
+  host: box.mynk.home
+- id: server-1752151865030-7088
+  name: cache
+  type: node
+  port: 22
+  host: cache.mynk.home
+- id: server-1752151865030-8642
+  name: db
+  type: node
+  port: 22
+  host: db.mynk.home
+- id: server-1752151865030-7987
+  name: deploy
+  type: node
+  port: 22
+  host: deploy.mynk.home
+- id: server-1752151865030-9607
+  name: dhcp
+  type: node
+  port: 22
+  host: dhcp.mynk.home
+- id: server-1752151865030-7920
+  name: dns
+  type: node
+  port: 22
+  host: dns.mynk.home
+- id: server-1752151865030-1318
+  name: docker
+  type: node
+  port: 22
+  host: docker.mynk.home
+- id: server-1752151865030-5578
+  name: gcv
+  type: node
+  port: 22
+  host: gcv.mynk.home
+- id: server-1752151865031-5448
+  name: go-flow
+  type: node
+  port: 22
+  host: go-flow.mynk.home
+- id: server-1752151865031-2363
+  name: gw
+  type: node
+  port: 22
+  host: gw.mynk.home
+- id: server-1752151865031-7869
+  name: haos
+  type: node
+  port: 22
+  host: haos.mynk.home
+- id: server-1752151865031-4835
+  name: imm
+  type: node
+  port: 22
+  host: imm.mynk.home
+- id: server-1752151865031-6576
+  name: ipmi
+  type: node
+  port: 22
+  host: ipmi.mynk.home
+- id: server-1752151865031-8946
+  name: kibana
+  type: node
+  port: 22
+  host: kibana.mynk.home
+- id: server-1752151865031-3632
+  name: kuma
+  type: node
+  port: 22
+  host: kuma.mynk.home
+- id: server-1752151865031-6756
+  name: l2sw-1
+  type: node
+  port: 22
+  host: l2sw-1.mynk.home
+- id: server-1752151865031-9130
+  name: nas
+  type: node
+  port: 22
+  host: nas.mynk.home
+- id: server-1752151865031-5863
+  name: nas-share
+  type: node
+  port: 22
+  host: nas-share.mynk.home
+- id: server-1752151865031-3930
+  name: ns
+  type: node
+  port: 22
+  host: ns.mynk.home
+- id: server-1752151865031-8497
+  name: obsrv
+  type: node
+  port: 22
+  host: obsrv.mynk.home
+- id: server-1752151865031-8350
+  name: proxy
+  type: node
+  port: 22
+  host: proxy.mynk.home
+- id: server-1752151865031-7989
+  name: pve03
+  type: node
+  port: 22
+  host: pve03.mynk.home
+- id: server-1752151865031-1301
+  name: pve04
+  type: node
+  port: 22
+  host: pve04.mynk.home
+- id: server-1752151865031-5471
+  name: radius
+  type: node
+  port: 22
+  host: radius.mynk.home
+- id: server-1752151865031-5729
+  name: raspi
+  type: node
+  port: 22
+  host: raspi.mynk.home
+- id: server-1752151865031-1636
+  name: raspi2
+  type: node
+  port: 22
+  host: raspi2.mynk.home
+- id: server-1752151865031-8481
+  name: srv
+  type: node
+  port: 22
+  host: srv.mynk.home
+- id: server-1752151865031-3447
+  name: tsvpn
+  type: node
+  port: 22
+  host: tsvpn.mynk.home
+- id: server-1752151865031-4493
+  name: ups
+  type: node
+  port: 22
+  host: ups.mynk.home
+- id: server-1752151865031-7371
+  name: www
+  type: node
+  port: 22
+  host: www.mynk.home

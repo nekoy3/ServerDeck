@@ -52,7 +52,7 @@
         <div class="row">
             {% for server in servers %}
             <div class="col-md-4">
-                <div class="card server-card" data-server-id="{{ server.id }}">
+                <div class="card server-card {% if server.is_new %}border-success{% elif server.is_deleted %}border-danger{% endif %}" data-server-id="{{ server.id }}">
                     <div class="card-body server-card-body d-flex align-items-center">
                         <i class="server-card-icon fas {% if server.type == 'node' %}fa-server node{% elif server.type == 'virtual_machine' %}fa-laptop virtual_machine{% elif server.type == 'network_device' %}fa-network-wired network_device{% elif server.type == 'kvm' %}fa-boxes-stacked kvm{% else %}fa-question-circle{% endif %}"></i>
                         <div class="server-card-info">
@@ -79,11 +79,16 @@
                             </div>
                         </div>
                     </div>
-                    {% if server.type == 'ssh' %}
                     <div class="card-footer server-card-footer">
+                        {% if server.is_new %}
+                        <button class="btn btn-sm btn-success setup-btn" data-id="{{ server.id }}">設定</button>
+                        {% elif server.is_deleted %}
+                        <button class="btn btn-sm btn-danger confirm-delete-btn" data-id="{{ server.id }}">削除</button>
+                        <button class="btn btn-sm btn-secondary cancel-delete-btn" data-id="{{ server.id }}">維持</button>
+                        {% elif server.type == 'ssh' %}
                         <a href="/ssh/{{ server.id }}" class="btn btn-primary btn-sm">SSH接続</a>
+                        {% endif %}
                     </div>
-                    {% endif %}
                 </div>
             </div>
             {% endfor %}
