@@ -345,9 +345,11 @@ def handle_start_ssh(data):
         app.logger.debug(f"Server '{server_id}' not found.");
         emit('ssh_output', {'output': f"Error: Server '{server_id}' not found in configuration.\r\n"});
         return
-    if server_info.get('type') != 'ssh':
-        app.logger.debug(f"Server '{server_id}' is not an SSH type server.");
-        emit('ssh_output', {'output': f"Error: Server '{server_id}' is not an SSH type server.\r\n"});
+    # Allow SSH connection for 'node', 'virtual_machine', 'network_device', 'container' types
+    ssh_connectable_types = ['node', 'virtual_machine', 'network_device', 'container']
+    if server_info.get('type') not in ssh_connectable_types:
+        app.logger.debug(f"Server '{server_id}' is not an SSH connectable type server.");
+        emit('ssh_output', {'output': f"Error: Server '{server_id}' is not an SSH connectable type server.\r\n"});
         return
     try:
         client = paramiko.SSHClient();

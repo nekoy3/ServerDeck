@@ -184,19 +184,21 @@ document.addEventListener('DOMContentLoaded', function() {
 
         function getIconClass(type) {
             switch (type) {
-                case 'ssh': return 'fa-terminal ssh';
-                case 'url': return 'fa-globe url';
-                case 'network_device': return 'fa-network-wired network_device';
-                default: return 'fa-server';
+                case 'node': return 'fa-server';
+                case 'virtual_machine': return 'fa-hard-drive';
+                case 'network_device': return 'fa-network-wired';
+                case 'container': return 'fa-cube';
+                default: return 'fa-question-circle'; // Unknown type
             }
         }
 
         function getTypeDisplayName(type) {
             switch (type) {
-                case 'ssh': return 'SSHサーバー';
-                case 'url': return 'URLサービス';
+                case 'node': return 'ノード';
+                case 'virtual_machine': return '仮想マシン';
                 case 'network_device': return 'ネットワークデバイス';
-                default: return type;
+                case 'container': return 'コンテナ';
+                default: return '不明';
             }
         }
 
@@ -289,14 +291,15 @@ document.addEventListener('DOMContentLoaded', function() {
             // Hide all by default
             hostGroup.style.display = 'none';
             portGroup.style.display = 'none';
-            urlGroup.style.display = 'none';
+            urlGroup.style.display = 'none'; // This group will effectively be unused now
             usernameGroup.style.display = 'none';
             authMethodGroup.style.display = 'none';
             passwordGroup.style.display = 'none';
-            sshKeySelectGroup.style.display = 'none'; // Changed from Path to Select
+            sshKeySelectGroup.style.display = 'none';
 
             // Show relevant fields based on type
-            if (type === 'ssh' || type === 'network_device') {
+            // All new types (node, virtual_machine, container) and network_device will use host/SSH related fields
+            if (['node', 'virtual_machine', 'network_device', 'container'].includes(type)) {
                 hostGroup.style.display = 'block';
                 portGroup.style.display = 'block';
                 usernameGroup.style.display = 'block';
@@ -304,16 +307,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Further toggle based on auth method
                 if (serverAuthMethodSelect.value === 'password') {
                     passwordGroup.style.display = 'block';
-                }
-
-                else {
-                    sshKeySelectGroup.style.display = 'block'; // Show SSH key select
+                } else {
+                    sshKeySelectGroup.style.display = 'block';
                 }
             }
-
-            else if (type === 'url') {
-                urlGroup.style.display = 'block';
-            }
+            // No 'url' type anymore, so no 'else if (type === 'url')' block needed
         }
 
         // Event listener for type select change

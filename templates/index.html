@@ -54,8 +54,8 @@
             <div class="col-md-4">
                 <div class="card server-card" data-server-id="{{ server.id }}">
                     <div class="card-body server-card-body d-flex align-items-center">
-                        <i class="server-card-icon fas {% if server.type == 'ssh' %}fa-terminal ssh{% elif server.type == 'url' %}fa-globe url{% elif server.type == 'network_device' %}fa-network-wired network_device{% else %}fa-server{% endif %}"></i>
-                        <div>
+                        <i class="server-card-icon fas {% if server.type == 'node' %}fa-server node{% elif server.type == 'virtual_machine' %}fa-hard-drive virtual_machine{% elif server.type == 'network_device' %}fa-network-wired network_device{% elif server.type == 'container' %}fa-cube container{% else %}fa-question-circle{% endif %}"></i>
+                        <div class="server-card-info">
                             <h5 class="card-title server-card-title">{{ server.name }}</h5>
                             <p class="card-text server-card-text"><strong>タイプ:</strong> {{ server.type | capitalize }}</p>
                             {% if server.host %}
@@ -77,13 +77,13 @@
                             <div class="d-flex align-items-center mt-2">
                                 <div class="ping-status-box" id="ping-status-{{ server.id }}"></div>
                             </div>
-                            {% if server.type == 'ssh' %}
-                            <div class="mt-2">
-                                <a href="/ssh/{{ server.id }}" class="btn btn-primary btn-sm">SSH接続</a>
-                            </div>
-                            {% endif %}
                         </div>
                     </div>
+                    {% if server.type == 'ssh' %}
+                    <div class="card-footer server-card-footer">
+                        <a href="/ssh/{{ server.id }}" class="btn btn-primary btn-sm">SSH接続</a>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
             {% endfor %}
