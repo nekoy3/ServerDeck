@@ -356,6 +356,29 @@ def delete_server(server_id):
     save_servers_config(config)
     return jsonify({"message": "Server deleted"}), 204
 
+@app.route('/bulk_delete_servers', methods=['POST'])
+@login_required
+def bulk_delete_servers():
+    data = request.json
+    server_ids_to_delete = data.get('server_ids', [])
+    
+    if not server_ids_to_delete:
+        return jsonify({"error": "No server IDs provided for deletion."}), 400
+
+    config = load_servers_config()
+    servers = config.get('servers', [])
+    original_len = len(servers)
+    
+    # Filter out servers that are in the deletion list
+    servers = [s for s in servers if s['id'] not in server_ids_to_delete]
+    
+    if len(servers) == original_len:
+        return jsonify({"error": "No matching servers found for deletion."}), 404
+    
+    config['servers'] = servers
+    save_servers_config(config)
+    return jsonify({"message": f"{original_len - len(servers)} servers deleted."}), 200
+
 @app.route('/api/extra_import_url', methods=['GET'])
 @login_required
 def get_extra_import_url():

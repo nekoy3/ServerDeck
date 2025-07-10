@@ -73,24 +73,23 @@ body {
     position: absolute;
     left: 20px;
     top: 50%;
-    transform: translateY(-50%); /* ★基本の垂直中央揃え */
+    transform: translateY(-50%);
     font-size: 2rem;
     color: var(--text-color-secondary);
 }
 
 .server-card-info {
     margin-left: 55px;
-    overflow-wrap: break-word; /* ★テキストのはみ出しを防止 */
+    overflow-wrap: break-word;
 }
-
 
 /* --- 個別のアイコンの色と位置調整 --- */
 .server-card-icon.node {
-    color: #fd7e14; /* Orange for Node */
+    color: #fd7e14;
 }
 
 .server-card-icon.virtual_machine {
-    color: #ffc107; /* Yellow for Virtual Machine */
+    color: #ffc107;
 }
 
 .server-card-icon.network_device {
@@ -98,9 +97,8 @@ body {
 }
 
 .server-card-icon.kvm {
-    color: #28a745; /* Green for KVM */
+    color: #28a745;
 }
-
 
 /* --- テキストとタグのスタイル --- */
 .server-card-title {
@@ -120,7 +118,6 @@ body {
     margin-right: 5px;
     margin-bottom: 5px;
 }
-
 
 /* --- 設定ページのスタイル --- */
 #config-modal-content {
@@ -176,7 +173,6 @@ body {
     color: var(--card-bg);
 }
 
-/* ...（以下、ダークテーマやPingステータスのスタイルが続く）... */
 /* --- Ping Status Box --- */
 .ping-status-box {
     display: inline-block;
@@ -185,22 +181,40 @@ body {
     font-size: 0.8rem;
     font-weight: bold;
     text-transform: uppercase;
-    color: white; /* Default text color for status boxes */
+    color: white;
 }
 
 .ping-status-box.online {
-    background-color: #28a745; /* Green */
+    background-color: #28a745;
 }
 
 .ping-status-box.offline {
-    background-color: #dc3545; /* Red */
+    background-color: #dc3545;
 }
 
 .ping-status-box.checking {
-    background-color: #ffc107; /* Yellow/Orange */
-    color: #343a40; /* Dark text for yellow background */
+    background-color: #ffc107;
+    color: #343a40;
 }
 
 .ping-status-box.na {
-    background-color: #6c757d; /* Grey */
+    background-color: #6c757d;
+}
+
+/* Config Modal specific styles for server cards */
+.config-server-card {
+    position: relative; /* For checkbox positioning */
+}
+
+.config-checkbox-overlay {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 10;
+}
+
+.config-server-card.selected {
+    filter: grayscale(80%);
+    border-color: #007bff;
+    box-shadow: 0 0 15px rgba(0, 123, 255, 0.5);
 }

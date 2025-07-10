@@ -113,51 +113,6 @@ servers:
   type: node
   port: 22
   host: gcv.mynk.home. 192.168.0.103
-- id: server-1752151823363-2484
-  name: go-flow
-  type: node
-  port: 22
-  host: go-flow.mynk.home. 192.168.0.95
-- id: server-1752151823363-7123
-  name: gw
-  type: node
-  port: 22
-  host: gw.mynk.home. 192.168.0.1
-- id: server-1752151823363-5648
-  name: haos
-  type: node
-  port: 22
-  host: haos.mynk.home. 192.168.0.98
-- id: server-1752151823363-3044
-  name: imm
-  type: node
-  port: 22
-  host: imm.mynk.home. 192.168.0.200
-- id: server-1752151823363-6663
-  name: ipmi
-  type: node
-  port: 22
-  host: ipmi.mynk.home. 192.168.0.97
-- id: server-1752151823363-2272
-  name: kibana
-  type: node
-  port: 22
-  host: kibana.mynk.home. 192.168.0.82
-- id: server-1752151823363-4274
-  name: kuma
-  type: node
-  port: 22
-  host: kuma.mynk.home. 192.168.0.104
-- id: server-1752151823363-5303
-  name: l2sw-1
-  type: node
-  port: 22
-  host: l2sw-1.mynk.home. 192.168.0.92
-- id: server-1752151823363-6694
-  name: nas
-  type: node
-  port: 22
-  host: nas.mynk.home. 192.168.0.106
 - id: server-1752151823363-1615
   name: nas-share
   type: node
@@ -369,23 +324,3 @@ servers:
   type: node
   port: 22
   host: raspi2.mynk.home
-- id: server-1752151865031-8481
-  name: srv
-  type: node
-  port: 22
-  host: srv.mynk.home
-- id: server-1752151865031-3447
-  name: tsvpn
-  type: node
-  port: 22
-  host: tsvpn.mynk.home
-- id: server-1752151865031-4493
-  name: ups
-  type: node
-  port: 22
-  host: ups.mynk.home
-- id: server-1752151865031-7371
-  name: www
-  type: node
-  port: 22
-  host: www.mynk.home
