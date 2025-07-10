@@ -44,3 +44,7 @@ config/users.yaml
 
 # Backup directory
 config/backup/
+
+# Extra Import and Settings files
+config/extra_import.yaml
+config/settings.yaml
