@@ -86,16 +86,19 @@ body {
 
 /* --- 個別のアイコンの色と位置調整 --- */
 .server-card-icon.node {
-    color: #007bff;
+    color: #fd7e14; /* Orange for Node */
 }
 
-.server-card-icon.virtual_machine,
-.server-card-icon.kvm { /* KVM uses the same style as virtual_machine */
-    color: #6f42c1;
+.server-card-icon.virtual_machine {
+    color: #ffc107; /* Yellow for Virtual Machine */
 }
 
 .server-card-icon.network_device {
     color: #dc3545;
+}
+
+.server-card-icon.kvm {
+    color: #28a745; /* Green for KVM */
 }
 
 

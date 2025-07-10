@@ -185,9 +185,8 @@ document.addEventListener('DOMContentLoaded', function() {
         function getIconClass(type) {
             switch (type) {
                 case 'node': return 'fa-server';
-                case 'virtual_machine': return 'fa-hard-drive';
-                case 'network_device': return 'fa-network-wired';
-                case 'kvm': return 'fa-hard-drive'; // KVM uses the same icon as virtual_machine
+                case 'virtual_machine': return 'fa-laptop';
+                case 'kvm': return 'fa-boxes-stacked';
                 default: return 'fa-question-circle'; // Unknown type
             }
         }
