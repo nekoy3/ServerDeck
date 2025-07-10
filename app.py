@@ -346,7 +346,7 @@ def handle_start_ssh(data):
         emit('ssh_output', {'output': f"Error: Server '{server_id}' not found in configuration.\r\n"});
         return
     # Allow SSH connection for 'node', 'virtual_machine', 'network_device', 'container' types
-    ssh_connectable_types = ['node', 'virtual_machine', 'network_device', 'container']
+    ssh_connectable_types = ['node', 'virtual_machine', 'network_device', 'kvm']
     if server_info.get('type') not in ssh_connectable_types:
         app.logger.debug(f"Server '{server_id}' is not an SSH connectable type server.");
         emit('ssh_output', {'output': f"Error: Server '{server_id}' is not an SSH connectable type server.\r\n"});

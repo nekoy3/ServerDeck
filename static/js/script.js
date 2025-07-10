@@ -144,7 +144,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         <div class="card server-card config-server-card" data-id="${server.id}">
                             <div class="card-body server-card-body d-flex align-items-center">
                                 <i class="server-card-icon fas ${getIconClass(server.type)}"></i>
-                                <div>
+                                <div class="server-card-info">
                                     <h5 class="card-title server-card-title">${server.name}</h5>
                                     <p class="card-text server-card-text"><strong>タイプ:</strong> ${server.type ? getTypeDisplayName(server.type) : ''}</p>
                                     ${server.host ? `<p class="card-text server-card-text"><strong>ホスト:</strong> ${server.host}</p>` : ''}
@@ -187,7 +187,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 case 'node': return 'fa-server';
                 case 'virtual_machine': return 'fa-hard-drive';
                 case 'network_device': return 'fa-network-wired';
-                case 'container': return 'fa-cube';
+                case 'kvm': return 'fa-hard-drive'; // KVM uses the same icon as virtual_machine
                 default: return 'fa-question-circle'; // Unknown type
             }
         }
@@ -197,7 +197,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 case 'node': return 'ノード';
                 case 'virtual_machine': return '仮想マシン';
                 case 'network_device': return 'ネットワークデバイス';
-                case 'container': return 'コンテナ';
+                case 'kvm': return 'KVM';
                 default: return '不明';
             }
         }
@@ -298,8 +298,8 @@ document.addEventListener('DOMContentLoaded', function() {
             sshKeySelectGroup.style.display = 'none';
 
             // Show relevant fields based on type
-            // All new types (node, virtual_machine, container) and network_device will use host/SSH related fields
-            if (['node', 'virtual_machine', 'network_device', 'container'].includes(type)) {
+            // All new types (node, virtual_machine, kvm) and network_device will use host/SSH related fields
+            if (['node', 'virtual_machine', 'network_device', 'kvm'].includes(type)) {
                 hostGroup.style.display = 'block';
                 portGroup.style.display = 'block';
                 usernameGroup.style.display = 'block';

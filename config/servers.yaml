@@ -36,7 +36,7 @@ servers:
   auth_method: password
 - id: server-1752076413946
   name: ioefw
-  type: container
+  type: kvm
   port: 22
   auth_method: password
   host: xx
@@ -50,6 +50,6 @@ servers:
   auth_method: password
 - id: server-1752116643170
   name: container
-  type: container
+  type: kvm
   port: 22
   auth_method: password
