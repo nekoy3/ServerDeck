@@ -1,6 +1,6 @@
 import sys
 import logging
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for, flash
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for, flash, send_from_directory, make_response
 from flask_socketio import SocketIO, emit
 import yaml
 import os
@@ -12,6 +12,8 @@ import sys
 from werkzeug.utils import secure_filename
 from werkzeug.security import check_password_hash
 from functools import wraps
+from datetime import datetime
+import shutil
 
 app = Flask(__name__)
 # IMPORTANT: In a production environment, use a strong, randomly generated secret key
@@ -66,9 +68,46 @@ USERS_CONFIG_PATH = os.path.join(CONFIG_DIR, 'users.yaml')
 UPLOAD_FOLDER = os.path.join(CONFIG_DIR, 'uploaded_ssh_keys')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True);
 
+BACKUP_DIR = os.path.join(CONFIG_DIR, 'backup')
+os.makedirs(BACKUP_DIR, exist_ok=True);
+
 active_ssh_sessions = {}
 
 # --- Config Loading/Saving ---
+def backup_config_file(file_path):
+    try:
+        if not os.path.exists(file_path):
+            app.logger.warning(f"Backup failed: Source file does not exist: {file_path}")
+            return
+
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        file_name = os.path.basename(file_path)
+        base_name, ext = os.path.splitext(file_name)
+        backup_file_name = f"{base_name.split('_')[0]}_{timestamp}{ext}"
+        backup_path = os.path.join(BACKUP_DIR, backup_file_name)
+
+        shutil.copy2(file_path, backup_path)
+        app.logger.info(f"Backed up {file_name} to {backup_path}")
+
+        # Clean up old backups, keeping only the latest 5 for each type
+        backup_prefix = base_name.split('_')[0] # e.g., 'servers' or 'ssh_keys'
+        all_backups = []
+        for f in os.listdir(BACKUP_DIR):
+            if f.startswith(backup_prefix) and f.endswith(ext):
+                all_backups.append(os.path.join(BACKUP_DIR, f))
+
+        # Sort by modification time (oldest first)
+        all_backups.sort(key=os.path.getmtime)
+
+        # Remove oldest backups if count exceeds 5
+        while len(all_backups) > 5:
+            oldest_backup = all_backups.pop(0)
+            os.remove(oldest_backup)
+            app.logger.info(f"Removed old backup: {oldest_backup}")
+
+    except Exception as e:
+        app.logger.error(f"Error backing up {file_path}: {e}")
+
 def load_servers_config():
     if os.path.exists(SERVERS_CONFIG_PATH):
         with open(SERVERS_CONFIG_PATH, 'r') as f:
@@ -79,6 +118,7 @@ def save_servers_config(config_data):
     os.makedirs(CONFIG_DIR, exist_ok=True);
     with open(SERVERS_CONFIG_PATH, 'w') as f:
         yaml.dump(config_data, f, indent=2, sort_keys=False)
+    backup_config_file(SERVERS_CONFIG_PATH)
 
 def load_ssh_keys_config():
     if os.path.exists(SSH_KEYS_CONFIG_PATH):
@@ -90,12 +130,21 @@ def save_ssh_keys_config(config_data):
     os.makedirs(CONFIG_DIR, exist_ok=True);
     with open(SSH_KEYS_CONFIG_PATH, 'w') as f:
         yaml.dump(config_data, f, indent=2, sort_keys=False)
+    backup_config_file(SSH_KEYS_CONFIG_PATH)
 
 def load_users_config():
     if os.path.exists(USERS_CONFIG_PATH):
         with open(USERS_CONFIG_PATH, 'r') as f:
             return yaml.safe_load(f) or {"users": []}
     return {"users": []}
+
+# Type display names mapping
+TYPE_DISPLAY_NAMES = {
+    'node': 'ノード',
+    'virtual_machine': '仮想マシン',
+    'network_device': 'ネットワークデバイス',
+    'kvm': 'KVM',
+}
 
 # --- Authentication ---
 def login_required(f):
@@ -141,6 +190,8 @@ def logout():
 def index():
     config = load_servers_config()
     servers = config.get('servers', [])
+    for server in servers:
+        server['display_type'] = TYPE_DISPLAY_NAMES.get(server.get('type'), '不明')
     return render_template('index.html', servers=servers)
 
 @app.route('/config')
@@ -290,7 +341,7 @@ def upload_ssh_key_file():
     except paramiko.SSHException as e:
         app.logger.error(f"SSHException (RSA check): {e}");
         try:
-            app.logger.debug("Attempting to load as EdDSA key...");
+            app.logger.debug("Attempting to load as EdDSA key.");
             paramiko.EdDSAKey(filename=filepath);
             return jsonify({'path': filepath}), 200
         except AttributeError:
@@ -311,6 +362,107 @@ def upload_ssh_key_file():
         app.logger.error(f"General Exception (overall): {e}");
         os.remove(filepath);
         return jsonify({'error': f'Failed to process SSH key: {e}'}), 400
+
+# --- Backup API Endpoints ---
+@app.route('/api/backups', methods=['GET'])
+@login_required
+def list_backups():
+    try:
+        backup_files = []
+        for f in os.listdir(BACKUP_DIR):
+            if f.endswith(('.yaml', '.yml')):
+                file_path = os.path.join(BACKUP_DIR, f)
+                if os.path.isfile(file_path):
+                    backup_files.append({
+                        'name': f,
+                        'size': os.path.getsize(file_path),
+                        'last_modified': datetime.fromtimestamp(os.path.getmtime(file_path)).isoformat()
+                    })
+        # Sort by last modified, newest first
+        backup_files.sort(key=lambda x: x['last_modified'], reverse=True)
+        return jsonify(backup_files)
+    except Exception as e:
+        app.logger.error(f"Error listing backups: {e}")
+        return jsonify({"error": "Failed to list backups"}), 500
+
+@app.route('/api/backups/download/<filename>', methods=['GET'])
+@login_required
+def download_backup(filename):
+    try:
+        return send_from_directory(BACKUP_DIR, filename, as_attachment=True)
+    except FileNotFoundError:
+        return jsonify({"error": "File not found"}), 404
+    except Exception as e:
+        app.logger.error(f"Error downloading backup {filename}: {e}")
+        return jsonify({"error": "Failed to download backup"}), 500
+
+@app.route('/api/backups/delete/<filename>', methods=['DELETE'])
+@login_required
+def delete_backup(filename):
+    try:
+        file_path = os.path.join(BACKUP_DIR, filename)
+        if os.path.exists(file_path):
+            os.remove(file_path)
+            return jsonify({"message": "Backup deleted successfully"}), 200
+        return jsonify({"error": "File not found"}), 404
+    except Exception as e:
+        app.logger.error(f"Error deleting backup {filename}: {e}")
+        return jsonify({"error": "Failed to delete backup"}), 500
+
+@app.route('/api/config/import', methods=['POST'])
+@login_required
+def import_config():
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file part'}), 400
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'error': 'No selected file'}), 400
+
+    try:
+        # Read the uploaded YAML content
+        uploaded_content = file.read().decode('utf-8')
+        new_config = yaml.safe_load(uploaded_content)
+
+        # Determine if it's a servers.yaml or ssh_keys.yaml backup
+        if 'servers' in new_config:
+            save_servers_config(new_config)
+            return jsonify({"message": "Servers configuration imported successfully"}), 200
+        elif 'ssh_keys' in new_config:
+            save_ssh_keys_config(new_config)
+            return jsonify({"message": "SSH keys configuration imported successfully"}), 200
+        else:
+            return jsonify({"error": "Invalid configuration file format. Must contain 'servers' or 'ssh_keys' key."}), 400
+
+    except yaml.YAMLError as e:
+        return jsonify({"error": f"Invalid YAML format: {e}"}), 400
+    except Exception as e:
+        app.logger.error(f"Error importing config: {e}")
+        return jsonify({"error": f"Failed to import configuration: {e}"}), 500
+
+@app.route('/api/config/export', methods=['GET'])
+@login_required
+def export_config():
+    try:
+        servers_config = load_servers_config()
+        ssh_keys_config = load_ssh_keys_config()
+
+        # Combine into a single dictionary for export
+        full_config = {
+            "servers": servers_config.get("servers", []),
+            "ssh_keys": ssh_keys_config.get("ssh_keys", [])
+        }
+
+        # Dump to YAML string
+        yaml_string = yaml.dump(full_config, indent=2, sort_keys=False)
+
+        # Send as a file
+        response = make_response(yaml_string)
+        response.headers["Content-Disposition"] = "attachment; filename=serverdeck_config_export.yaml"
+        response.headers["Content-Type"] = "application/x-yaml"
+        return response
+    except Exception as e:
+        app.logger.error(f"Error exporting config: {e}")
+        return jsonify({"error": "Failed to export configuration"}), 500
 
 # --- Protected Socket.IO Events ---
 def _is_authenticated():

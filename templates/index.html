@@ -57,7 +57,7 @@
                         <i class="server-card-icon fas {% if server.type == 'node' %}fa-server node{% elif server.type == 'virtual_machine' %}fa-laptop virtual_machine{% elif server.type == 'network_device' %}fa-network-wired network_device{% elif server.type == 'kvm' %}fa-boxes-stacked kvm{% else %}fa-question-circle{% endif %}"></i>
                         <div class="server-card-info">
                             <h5 class="card-title server-card-title">{{ server.name }}</h5>
-                            <p class="card-text server-card-text"><strong>タイプ:</strong> {{ server.type | capitalize }}</p>
+                            <p class="card-text server-card-text"><strong>タイプ:</strong> {{ server.display_type }}</p>
                             {% if server.host %}
                             <p class="card-text server-card-text"><strong>ホスト:</strong> {{ server.host }}</p>
                             {% endif %}

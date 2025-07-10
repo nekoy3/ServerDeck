@@ -43,13 +43,13 @@ servers:
   username: xx
   password: xx
   description: xxxx
-- id: server-1752076428405
-  name: dfbdfb
-  type: virtual_machine
-  port: 22
-  auth_method: password
 - id: server-1752116643170
   name: container
   type: kvm
+  port: 22
+  auth_method: password
+- id: server-1752127940653
+  name: "\u3063\u3063\u3063r"
+  type: node
   port: 22
   auth_method: password

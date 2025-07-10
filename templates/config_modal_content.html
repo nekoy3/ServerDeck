@@ -1,7 +1,55 @@
 <div class="container-fluid" id="config-modal-content">
-    <h1 class="mb-4">サーバー設定 <button class="btn btn-secondary btn-sm ms-3" id="manageSshKeysBtn">SSHキー管理</button></h1>
-    <div class="row" id="server-list">
-        <!-- Server cards will be loaded here by JavaScript -->
+    <ul class="nav nav-tabs mb-3" id="configTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="servers-tab" data-bs-toggle="tab" data-bs-target="#servers-pane" type="button" role="tab" aria-controls="servers-pane" aria-selected="true">サーバー設定</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="backup-tab" data-bs-toggle="tab" data-bs-target="#backup-pane" type="button" role="tab" aria-controls="backup-pane" aria-selected="false">バックアップ</button>
+        </li>
+    </ul>
+    <div class="tab-content" id="configTabsContent">
+        <div class="tab-pane fade show active" id="servers-pane" role="tabpanel" aria-labelledby="servers-tab" tabindex="0">
+            <h2 class="mb-4">サーバー設定</h2>
+            <div class="row" id="server-list">
+                <!-- Server cards will be loaded here by JavaScript -->
+            </div>
+            <div class="mb-3">
+                <button type="button" class="btn btn-sm btn-outline-secondary mt-2" id="manageSshKeysBtn">SSHキーを管理</button>
+            </div>
+        </div>
+        <div class="tab-pane fade" id="backup-pane" role="tabpanel" aria-labelledby="backup-tab" tabindex="0">
+            <h2 class="mb-4">バックアップ管理</h2>
+            <div class="card mb-4">
+                <div class="card-header">バックアップファイル</div>
+                <div class="card-body">
+                    <div id="backup-file-list" class="list-group mb-3">
+                        <!-- Backup files will be loaded here by JavaScript -->
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mb-4">
+                <div class="card-header">設定のインポート</div>
+                <div class="card-body">
+                    <p>バックアップファイルまたはYAMLファイルをアップロードして設定をインポートします。</p>
+                    <form id="import-form">
+                        <div class="mb-3">
+                            <label for="import-file" class="form-label">ファイルを選択</label>
+                            <input class="form-control" type="file" id="import-file" accept=".yaml,.yml">
+                        </div>
+                        <button type="submit" class="btn btn-primary">インポート</button>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">設定のエクスポート</div>
+                <div class="card-body">
+                    <p>現在のサーバー設定をYAMLファイルとしてエクスポートします。</p>
+                    <button id="export-config-btn" class="btn btn-success">エクスポート</button>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 

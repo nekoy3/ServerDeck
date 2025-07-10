@@ -591,6 +591,120 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Initial fetch and render when config modal content is loaded
         fetchAndRenderServers();
+
+        // --- Backup Management Logic ---
+        const backupTabButton = document.getElementById('backup-tab');
+        const backupFileList = document.getElementById('backup-file-list');
+        const importForm = document.getElementById('import-form');
+        const importFileInput = document.getElementById('import-file');
+        const exportConfigBtn = document.getElementById('export-config-btn');
+
+        // Function to fetch and render backup files
+        async function fetchAndRenderBackups() {
+            try {
+                const response = await fetch('/api/backups');
+                const backups = await response.json();
+                backupFileList.innerHTML = ''; // Clear existing list
+                if (backups.length === 0) {
+                    backupFileList.innerHTML = '<p class="text-muted">バックアップファイルはありません。</p>';
+                } else {
+                    backups.forEach(backup => {
+                        const backupItem = `
+                            <div class="list-group-item d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong>${backup.name}</strong><br>
+                                    <small>サイズ: ${(backup.size / 1024).toFixed(2)} KB | 更新日時: ${new Date(backup.last_modified).toLocaleString()}</small>
+                                </div>
+                                <div>
+                                    <button class="btn btn-sm btn-info download-backup-btn" data-filename="${backup.name}">ダウンロード</button>
+                                    <button class="btn btn-sm btn-danger delete-backup-btn" data-filename="${backup.name}">削除</button>
+                                </div>
+                            </div>
+                        `;
+                        backupFileList.insertAdjacentHTML('beforeend', backupItem);
+                    });
+                    attachBackupEventListeners();
+                }
+            } catch (error) {
+                console.error('Error fetching backups:', error);
+                alert('バックアップファイルの読み込みに失敗しました。');
+            }
+        }
+
+        // Attach event listeners for backup buttons
+        function attachBackupEventListeners() {
+            document.querySelectorAll('.download-backup-btn').forEach(button => {
+                button.onclick = (event) => {
+                    const filename = event.target.dataset.filename;
+                    window.location.href = `/api/backups/download/${filename}`;
+                };
+            });
+
+            document.querySelectorAll('.delete-backup-btn').forEach(button => {
+                button.onclick = async (event) => {
+                    const filename = event.target.dataset.filename;
+                    if (confirm(`バックアップファイル '${filename}' を削除してもよろしいですか？`)) {
+                        try {
+                            const response = await fetch(`/api/backups/delete/${filename}`, {
+                                method: 'DELETE'
+                            });
+                            if (response.ok) {
+                                fetchAndRenderBackups(); // Re-render list
+                            } else {
+                                const errorData = await response.json();
+                                alert(`バックアップファイルの削除に失敗しました: ${errorData.error || response.statusText}`);
+                            }
+                        } catch (error) {
+                            console.error('Error deleting backup:', error);
+                            alert('バックアップファイルの削除中にエラーが発生しました。');
+                        }
+                    }
+                };
+            });
+        }
+
+        // Event listener for Backup tab click
+        backupTabButton.addEventListener('shown.bs.tab', () => {
+            fetchAndRenderBackups();
+        });
+
+        // Handle Import Form Submission
+        importForm.addEventListener('submit', async function(event) {
+            event.preventDefault();
+
+            if (importFileInput.files.length === 0) {
+                alert('インポートするファイルを選択してください。');
+                return;
+            }
+
+            const file = importFileInput.files[0];
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch('/api/config/import', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (response.ok) {
+                    alert('設定が正常にインポートされました。変更を反映するにはページをリロードしてください。');
+                    importFileInput.value = ''; // Clear file input
+                    fetchAndRenderServers(); // Update server list after import
+                } else {
+                    const errorData = await response.json();
+                    alert(`設定のインポートに失敗しました: ${errorData.error || response.statusText}`);
+                }
+            } catch (error) {
+                console.error('Error importing config:', error);
+                alert('設定のインポート中にエラーが発生しました。');
+            }
+        });
+
+        // Handle Export Button Click
+        exportConfigBtn.addEventListener('click', () => {
+            window.location.href = '/api/config/export';
+        });
     }
 
     // Event listener for config link click
