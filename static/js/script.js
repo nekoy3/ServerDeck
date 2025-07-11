@@ -77,8 +77,202 @@ document.addEventListener('DOMContentLoaded', function() {
     updatePingStatus();
     setInterval(updatePingStatus, 5000);
 
+    // イベントハンドラー関数を定義
+    function handleEditServerClick() {
+        const serverId = this.dataset.id;
+        fetch(`/api/servers/${serverId}`)
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => { throw err; });
+                }
+                return response.json();
+            })
+            .then(server => {
+                if (server) {
+                    const editModalElement = document.getElementById('editServerModal');
+                    const editModal = new bootstrap.Modal(editModalElement);
+
+                    // Use a one-time event listener for when the modal is fully shown
+                    editModalElement.addEventListener('shown.bs.modal', function populateModalFields() {
+                        const editServerId = document.getElementById('editServerId');
+                        if (editServerId) editServerId.value = server.id;
+                        const editServerName = document.getElementById('editServerName');
+                        if (editServerName) editServerName.value = server.name;
+                        const editServerHost = document.getElementById('editServerHost');
+                        if (editServerHost) editServerHost.value = server.host;
+                        const editServerPort = document.getElementById('editServerPort');
+                        if (editServerPort) editServerPort.value = server.port;
+                        const editServerType = document.getElementById('editServerType');
+                        if (editServerType) editServerType.value = server.type;
+                        const editServerUrl = document.getElementById('editServerUrl');
+                        if (editServerUrl) editServerUrl.value = server.url || '';
+                        const editServerDescription = document.getElementById('editServerDescription');
+                        if (editServerDescription) editServerDescription.value = server.description || '';
+                        const editServerTags = document.getElementById('editServerTags');
+                        if (editServerTags) editServerTags.value = server.tags ? server.tags.join(', ') : '';
+                        const editServerUsername = document.getElementById('editServerUsername');
+                        if (editServerUsername) editServerUsername.value = server.username || '';
+                        const editServerPassword = document.getElementById('editServerPassword');
+                        if (editServerPassword) editServerPassword.value = server.password || '';
+                        const editServerSshKeyPath = document.getElementById('editServerSshKeyPath');
+                        if (editServerSshKeyPath) editServerSshKeyPath.value = server.ssh_key_path || '';
+                        const editServerSshKeyPassphrase = document.getElementById('editServerSshKeyPassphrase');
+                        if (editServerSshKeyPassphrase) editServerSshKeyPassphrase.value = server.ssh_key_passphrase || '';
+
+                        // Remove the event listener after it's executed once
+                        editModalElement.removeEventListener('shown.bs.modal', populateModalFields);
+                    });
+
+                    editModal.show();
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching server data:', error);
+                alert('サーバーデータの取得に失敗しました: ' + (error.message || JSON.stringify(error)));
+            });
+    }
+
+    function handleDeleteServerClick() {
+        const serverId = this.dataset.id;
+        if (confirm('本当にこのサーバーを削除しますか？')) {
+            fetch(`/api/servers/${serverId}`, {
+                method: 'DELETE'
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => { throw err; });
+                }
+                // If the response is 204 No Content, don't try to parse JSON
+                if (response.status === 204) {
+                    return {}; // Return an empty object or null to proceed
+                }
+                return response.json();
+            })
+            .then(data => {
+                alert('サーバーが削除されました！');
+                loadServersForConfigModal(); // サーバーリストを再ロード
+            })
+            .catch(error => {
+                console.error('Error deleting server:', error);
+                alert('サーバーの削除に失敗しました: ' + (error.message || JSON.stringify(error)));
+            });
+        }
+    }
+
+    function handleSetupButtonClick() {
+        const serverId = this.dataset.id;
+        fetch(`/api/servers/${serverId}`)
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => { throw err; });
+                }
+                return response.json();
+            })
+            .then(server => {
+                if (server) {
+                    document.getElementById('editServerId').value = server.id;
+                    document.getElementById('editServerName').value = server.name;
+                    document.getElementById('editServerHost').value = server.host;
+                    document.getElementById('editServerPort').value = server.port;
+                    document.getElementById('editServerType').value = server.type;
+                    document.getElementById('editServerUrl').value = server.url || '';
+                    document.getElementById('editServerDescription').value = server.description || '';
+                    document.getElementById('editServerTags').value = server.tags ? server.tags.join(', ') : '';
+                    document.getElementById('editServerUsername').value = server.username || '';
+                    document.getElementById('editServerPassword').value = server.password || '';
+                    document.getElementById('editServerSshKeyPath').value = server.ssh_key_path || '';
+                    document.getElementById('editServerSshKeyPassphrase').value = server.ssh_key_passphrase || '';
+
+                    const editModal = new bootstrap.Modal(document.getElementById('editServerModal'));
+                    editModal.show();
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching server data for setup:', error);
+                alert('サーバーデータの取得に失敗しました: ' + (error.message || JSON.stringify(error)));
+            });
+    }
+
+    function handleConfirmDeleteClick() {
+        const serverId = this.dataset.id;
+        if (confirm('このサーバーを完全に削除しますか？')) {
+            fetch(`/delete_server_permanently/${serverId}`, {
+                method: 'POST'
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => { throw err; });
+                }
+                return response.json();
+            })
+            .then(data => {
+                alert('サーバーが完全に削除されました！');
+                loadServersForConfigModal(); // サーバーリストを再ロード
+            })
+            .catch(error => {
+                console.error('Error permanently deleting server:', error);
+                alert('サーバーの完全削除に失敗しました: ' + (error.message || JSON.stringify(error)));
+            });
+        }
+    }
+
+    function handleCancelDeleteClick() {
+        const serverId = this.dataset.id;
+        if (confirm('このサーバーの削除を取り消し、維持しますか？')) {
+            fetch(`/cancel_delete_server/${serverId}`, {
+                method: 'POST'
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => { throw err; });
+                }
+                return response.json();
+            })
+            .then(data => {
+                alert('サーバーの削除が取り消されました！');
+                loadServersForConfigModal(); // サーバーリストを再ロード
+            })
+            .catch(error => {
+                console.error('Error canceling server delete:', error);
+                alert('サーバーの削除取り消しに失敗しました: ' + (error.message || JSON.stringify(error)));
+            });
+        }
+    }
+
     function initializeConfigModalScripts() {
-        // フォーム送信処理
+        // 「SSHキーを管理」ボタンのクリックイベント
+        const manageSshKeysBtn = document.getElementById('manageSshKeysBtn');
+        if (manageSshKeysBtn) {
+            manageSshKeysBtn.addEventListener('click', function(e) {
+                e.preventDefault(); // デフォルトのモーダル表示をキャンセル
+                const configModalBody = document.getElementById('configModalBody');
+                fetch('/ssh_keys') // SSHキー管理用のHTMLをフェッチ
+                    .then(response => response.text())
+                    .then(html => {
+                        configModalBody.innerHTML = html;
+                        initializeSshKeyManagementScripts(); // SSHキー管理画面用のスクリプトを初期化
+                    })
+                    .catch(error => console.error('Error loading SSH key management content:', error));
+            });
+        }
+
+        // サーバー設定タブのコンテンツをロードする関数
+        function loadServerConfigContent() {
+            const configModalBody = document.getElementById('configModalBody');
+            fetch('/config')
+                .then(response => response.text())
+                .then(html => {
+                    configModalBody.innerHTML = html;
+                    // 設定モーダルのスクリプトを再初期化
+                    initializeConfigModalScripts();
+                    // 動的にロードされた後、サーバーリストをロード
+                    loadServersForConfigModal();
+                    loadExtraImportUrl();
+                })
+                .catch(error => console.error('Error reloading config modal content:', error));
+        }
+
+        // フォーム送信処理 (既存のconfigFormがあれば)
         const configForm = document.getElementById('configForm');
         if (configForm) {
             configForm.addEventListener('submit', function(e) {
@@ -88,276 +282,439 @@ document.addEventListener('DOMContentLoaded', function() {
                     method: 'POST',
                     body: formData
                 })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.status === 'success') {
-                        alert('設定が保存されました！');
-                        // モーダルを閉じる
-                        const configModal = bootstrap.Modal.getInstance(document.getElementById('configModal'));
-                        configModal.hide();
-                        // ページをリロードして変更を反映
-                        location.reload();
-                    } else {
-                        alert('設定の保存に失敗しました: ' + data.message);
+                .then(response => {
+                    if (!response.ok) {
+                        return response.json().then(err => { throw err; });
                     }
+                    return response.json();
                 })
-                .catch(error => console.error('Error saving config:', error));
+                .then(data => {
+                    alert('設定が保存されました！');
+                    const configModal = bootstrap.Modal.getInstance(document.getElementById('configModal'));
+                    configModal.hide();
+                    location.reload();
+                })
+                .catch(error => {
+                    console.error('Error saving config:', error);
+                    alert('設定の保存に失敗しました: ' + (error.message || JSON.stringify(error)));
+                });
             });
         }
 
-        // SSHキーのアップロード処理
-        const sshKeyUploadForm = document.getElementById('sshKeyUploadForm');
-        if (sshKeyUploadForm) {
-            sshKeyUploadForm.addEventListener('submit', function(e) {
-                e.preventDefault();
-                const formData = new FormData(sshKeyUploadForm);
-                fetch('/upload_ssh_key', {
-                    method: 'POST',
-                    body: formData
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.status === 'success') {
-                        alert('SSHキーがアップロードされました！');
-                        // フォームをリセット
-                        sshKeyUploadForm.reset();
-                        // SSHキーリストを更新（必要であれば）
-                    } else {
-                        alert('SSHキーのアップロードに失敗しました: ' + data.message);
-                    }
-                })
-                .catch(error => console.error('Error uploading SSH key:', error));
+        // SSHキー管理モーダルが開かれたときにSSHキーリストをロード
+        const sshKeyManagementModalElement = document.getElementById('sshKeyManagementModal');
+        if (sshKeyManagementModalElement) {
+            sshKeyManagementModalElement.addEventListener('shown.bs.modal', function () {
+                loadSshKeysForManagementModal();
             });
         }
 
-        // サーバー編集ボタンのイベントリスナー
-        document.querySelectorAll('.edit-server-btn').forEach(button => {
-            button.addEventListener('click', function() {
-                const serverId = this.dataset.id;
-                fetch(`/get_server/${serverId}`)
-                    .then(response => response.json())
-                    .then(server => {
-                        if (server) {
-                            document.getElementById('editServerId').value = server.id;
-                            document.getElementById('editServerName').value = server.name;
-                            document.getElementById('editServerHost').value = server.host;
-                            document.getElementById('editServerPort').value = server.port;
-                            document.getElementById('editServerType').value = server.type;
-                            document.getElementById('editServerUrl').value = server.url || '';
-                            document.getElementById('editServerDescription').value = server.description || '';
-                            document.getElementById('editServerTags').value = server.tags ? server.tags.join(', ') : '';
-                            document.getElementById('editServerUsername').value = server.username || '';
-                            document.getElementById('editServerPassword').value = server.password || '';
-                            document.getElementById('editServerSshKeyPath').value = server.ssh_key_path || '';
-                            document.getElementById('editServerSshKeyPassphrase').value = server.ssh_key_passphrase || '';
-
-                            const editModal = new bootstrap.Modal(document.getElementById('editServerModal'));
-                            editModal.show();
-                        }
-                    })
-                    .catch(error => console.error('Error fetching server data:', error));
-            });
-        });
-
-        // サーバー編集フォームの送信処理
-        const editServerForm = document.getElementById('editServerForm');
-        if (editServerForm) {
-            editServerForm.addEventListener('submit', function(e) {
-                e.preventDefault();
-                const formData = new FormData(editServerForm);
-                const serverId = document.getElementById('editServerId').value;
-                fetch(`/update_server/${serverId}`, {
-                    method: 'POST',
-                    body: formData
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.status === 'success') {
-                        alert('サーバー情報が更新されました！');
-                        const editModal = bootstrap.Modal.getInstance(document.getElementById('editServerModal'));
-                        editModal.hide();
-                        location.reload();
-                    } else {
-                        alert('サーバー情報の更新に失敗しました: ' + data.message);
-                    }
-                })
-                .catch(error => console.error('Error updating server:', error));
-            });
-        }
-
-        // サーバー削除ボタンのイベントリスナー
-        document.querySelectorAll('.delete-server-btn').forEach(button => {
-            button.addEventListener('click', function() {
-                const serverId = this.dataset.id;
-                if (confirm('本当にこのサーバーを削除しますか？')) {
-                    fetch(`/delete_server/${serverId}`, {
-                        method: 'POST'
-                    })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.status === 'success') {
-                            alert('サーバーが削除されました！');
-                            location.reload();
-                        } else {
-                            alert('サーバーの削除に失敗しました: ' + data.message);
-                        }
-                    })
-                    .catch(error => console.error('Error deleting server:', error));
-                }
-            });
-        });
-
-        // 新規サーバー追加フォームの送信処理
-        const addServerForm = document.getElementById('addServerForm');
-        if (addServerForm) {
-            addServerForm.addEventListener('submit', function(e) {
-                e.preventDefault();
-                const formData = new FormData(addServerForm);
-                fetch('/add_server', {
-                    method: 'POST',
-                    body: formData
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.status === 'success') {
-                        alert('サーバーが追加されました！');
-                        addServerForm.reset();
-                        location.reload();
-                    } else {
-                        alert('サーバーの追加に失敗しました: ' + data.message);
-                    }
-                })
-                .catch(error => console.error('Error adding server:', error));
+        // SSHキー追加/編集モーダルが開かれたときにフォームをリセット
+        const addSshKeyModalElement = document.getElementById('addSshKeyModal');
+        if (addSshKeyModalElement) {
+            addSshKeyModalElement.addEventListener('shown.bs.modal', function () {
+                document.getElementById('sshKeyForm').reset();
+                document.getElementById('sshKeyId').value = ''; // IDをクリアして新規追加モードにする
             });
         }
 
         // Extra Import URL設定フォームの送信処理
-        const extraImportForm = document.getElementById('extraImportForm');
+        const extraImportForm = document.getElementById('extra-import-form');
         if (extraImportForm) {
             extraImportForm.addEventListener('submit', function(e) {
                 e.preventDefault();
-                const formData = new FormData(extraImportForm);
-                fetch('/save_extra_import_url', {
+                const extraImportUrlInput = document.getElementById('extra-import-url');
+                const newUrl = extraImportUrlInput.value;
+
+                fetch('/api/extra_import_url', {
                     method: 'POST',
-                    body: formData
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ url: newUrl })
                 })
-                .then(response => response.json())
+                .then(response => {
+                    if (!response.ok) {
+                        return response.json().then(err => { throw err; });
+                    }
+                    return response.json();
+                })
                 .then(data => {
-                    if (data.status === 'success') {
-                        alert('Extra Import URLが保存されました！');
-                        // フォームをリセット
-                        extraImportForm.reset();
-                        // ページをリロードして変更を反映
-                        location.reload();
+                    if (data.confirmation_needed) {
+                        const extraImportConfirmModal = new bootstrap.Modal(document.getElementById('extraImportConfirmModal'));
+                        extraImportConfirmModal.show();
+
+                        document.getElementById('extraImportConfirmDeleteBtn').onclick = () => {
+                            sendExtraImportConfirmation('delete_all');
+                            extraImportConfirmModal.hide();
+                        };
+                        document.getElementById('extraImportConfirmKeepBtn').onclick = () => {
+                            sendExtraImportConfirmation('keep_all');
+                            extraImportConfirmModal.hide();
+                        };
+                        document.getElementById('extraImportConfirmCancelBtn').onclick = () => {
+                            sendExtraImportConfirmation('cancel');
+                            extraImportConfirmModal.hide();
+                        };
                     } else {
-                        alert('Extra Import URLの保存に失敗しました: ' + data.message);
+                        alert(data.message);
+                        loadExtraImportUrl(); // URLを再ロードして表示を更新
+                        loadServersForConfigModal(); // サーバーリストを再ロード
                     }
                 })
-                .catch(error => console.error('Error saving Extra Import URL:', error));
+                .catch(error => {
+                    console.error('Error saving Extra Import URL:', error);
+                    alert('Extra Import URLの保存に失敗しました: ' + (error.message || JSON.stringify(error)));
+                });
             });
         }
 
-        // Extra Import URLの削除処理
-        const deleteExtraImportUrlBtn = document.getElementById('deleteExtraImportUrlBtn');
-        if (deleteExtraImportUrlBtn) {
-            deleteExtraImportUrlBtn.addEventListener('click', function() {
-                if (confirm('本当にExtra Import URLを削除しますか？')) {
-                    fetch('/delete_extra_import_url', {
-                        method: 'POST'
-                    })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.status === 'success') {
-                            alert('Extra Import URLが削除されました！');
-                            location.reload();
-                        } else {
-                            alert('Extra Import URLの削除に失敗しました: ' + data.message);
-                        }
-                    })
-                    .catch(error => console.error('Error deleting Extra Import URL:', error));
+        function sendExtraImportConfirmation(action) {
+            fetch('/api/extra_import_url/confirm', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ action: action })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => { throw err; });
                 }
+                return response.json();
+            })
+            .then(data => {
+                alert(data.message);
+                loadExtraImportUrl(); // URLを再ロードして表示を更新
+                loadServersForConfigModal(); // サーバーリストを再ロード
+            })
+            .catch(error => {
+                console.error('Error sending extra import confirmation:', error);
+                alert('Extra Importの確認に失敗しました: ' + (error.message || JSON.stringify(error)));
             });
         }
 
-        // 新規サーバー設定ボタンのイベントリスナー
-        document.querySelectorAll('.setup-btn').forEach(button => {
-            button.addEventListener('click', function() {
-                const serverId = this.dataset.id;
-                // 既存の編集モーダルを再利用
-                fetch(`/get_server/${serverId}`)
-                    .then(response => response.json())
-                    .then(server => {
-                        if (server) {
-                            document.getElementById('editServerId').value = server.id;
-                            document.getElementById('editServerName').value = server.name;
-                            document.getElementById('editServerHost').value = server.host;
-                            document.getElementById('editServerPort').value = server.port;
-                            document.getElementById('editServerType').value = server.type;
-                            document.getElementById('editServerUrl').value = server.url || '';
-                            document.getElementById('editServerDescription').value = server.description || '';
-                            document.getElementById('editServerTags').value = server.tags ? server.tags.join(', ') : '';
-                            document.getElementById('editServerUsername').value = server.username || '';
-                            document.getElementById('editServerPassword').value = server.password || '';
-                            document.getElementById('editServerSshKeyPath').value = server.ssh_key_path || '';
-                            document.getElementById('editServerSshKeyPassphrase').value = server.ssh_key_passphrase || '';
+        // Extra Import URLのロード
+        function loadExtraImportUrl() {
+            fetch('/api/extra_import_url')
+                .then(response => response.json())
+                .then(data => {
+                    const extraImportUrlInput = document.getElementById('extra-import-url');
+                    if (extraImportUrlInput) {
+                        extraImportUrlInput.value = data.url || '';
+                    }
+                })
+                .catch(error => console.error('Error loading extra import URL:', error));
+        }
 
-                            const editModal = new bootstrap.Modal(document.getElementById('editServerModal'));
-                            editModal.show();
-                        }
-                    })
-                    .catch(error => console.error('Error fetching server data for setup:', error));
-            });
-        });
-
-        // 削除確認ボタンのイベントリスナー
-        document.querySelectorAll('.confirm-delete-btn').forEach(button => {
-            button.addEventListener('click', function() {
-                const serverId = this.dataset.id;
-                if (confirm('このサーバーを完全に削除しますか？')) {
-                    fetch(`/delete_server_permanently/${serverId}`, {
-                        method: 'POST'
-                    })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.status === 'success') {
-                            alert('サーバーが完全に削除されました！');
-                            location.reload();
-                        } else {
-                            alert('サーバーの完全削除に失敗しました: ' + data.message);
-                        }
-                    })
-                    .catch(error => console.error('Error permanently deleting server:', error));
-                }
-            });
-        });
-
-        // 削除キャンセルボタンのイベントリスナー
-        document.querySelectorAll('.cancel-delete-btn').forEach(button => {
-            button.addEventListener('click', function() {
-                const serverId = this.dataset.id;
-                if (confirm('このサーバーの削除を取り消し、維持しますか？')) {
-                    fetch(`/cancel_delete_server/${serverId}`, {
-                        method: 'POST'
-                    })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.status === 'success') {
-                            alert('サーバーの削除が取り消されました！');
-                            location.reload();
-                        } else {
-                            alert('サーバーの削除取り消しに失敗しました: ' + data.message);
-                        }
-                    })
-                    .catch(error => console.error('Error canceling server delete:', error));
-                }
-            });
-        });
-
-        // 設定モーダルが開かれたときにサーバーリストをロード
+        // 設定モーダルが開かれたときにサーバーリストとExtra Import URLをロード
         const configModalElement = document.getElementById('configModal');
         if (configModalElement) {
             configModalElement.addEventListener('shown.bs.modal', function () {
                 loadServersForConfigModal();
+                loadExtraImportUrl(); // Extra Import URLもロード
+            });
+        }
+
+        // サーバー選択機能の初期化（設定モーダル内）
+        const bulkDeleteServersBtn = document.getElementById('bulkDeleteServersBtn');
+
+        // 一括削除ボタンのクリックイベント（設定モーダル内）
+        if (bulkDeleteServersBtn) {
+            bulkDeleteServersBtn.removeEventListener('click', handleBulkDeleteServersClick); // 既存のリスナーを削除
+            bulkDeleteServersBtn.addEventListener('click', handleBulkDeleteServersClick); // 新しいリスナーを追加
+        }
+
+
+        function handleBulkDeleteServersClick() {
+            const selectedServerIds = [];
+            document.querySelectorAll('.config-server-checkbox:checked').forEach(checkbox => {
+                selectedServerIds.push(checkbox.dataset.serverId);
+            });
+
+            if (selectedServerIds.length > 0) {
+                if (confirm(`${selectedServerIds.length}個のサーバーを本当に削除しますか？`)) {
+                    fetch('/bulk_delete_servers', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ server_ids: selectedServerIds })
+                    })
+                    .then(response => {
+                        if (!response.ok) {
+                            return response.json().then(err => { throw err; });
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        alert('選択されたサーバーが削除されました！');
+                        // サーバーリストを再ロードしてUIを更新
+                        loadServersForConfigModal();
+                    })
+                    .catch(error => {
+                        console.error('Error during bulk delete:', error);
+                        alert('サーバーの一括削除に失敗しました: ' + (error.message || JSON.stringify(error)));
+                    });
+                }
+            } else {
+                alert('削除するサーバーを選択してください。');
+            }
+        }
+
+    }
+
+    // SSHキー管理モーダル用の関数群
+    function loadSshKeysForManagementModal() {
+        fetch('/api/ssh_keys')
+            .then(response => response.json())
+            .then(sshKeys => {
+                const sshKeyListDiv = document.getElementById('ssh-key-list');
+                if (!sshKeyListDiv) return;
+                sshKeyListDiv.innerHTML = ''; // Clear existing content
+
+                if (sshKeys.length === 0) {
+                    sshKeyListDiv.innerHTML = '<p>SSHキーはまだ登録されていません。</p>';
+                    return;
+                }
+
+                sshKeys.forEach(key => {
+                    const keyItemHtml = `
+                        <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                            <div>
+                                <input class="form-check-input me-1 ssh-key-checkbox" type="checkbox" value="" data-key-id="${key.id}">
+                                <strong>${key.name}</strong><br>
+                                <small>${key.path}</small>
+                            </div>
+                            <div>
+                                <button class="btn btn-sm btn-info edit-ssh-key-btn" data-id="${key.id}">編集</button>
+                                <button class="btn btn-sm btn-danger delete-ssh-key-btn" data-id="${key.id}">削除</button>
+                            </div>
+                        </div>
+                    `;
+                    sshKeyListDiv.insertAdjacentHTML('beforeend', keyItemHtml);
+                });
+
+                attachSshKeyEventListeners();
+                updateBulkDeleteSshKeysButtonVisibility();
+            })
+            .catch(error => console.error('Error loading SSH keys:', error));
+    }
+
+    function attachSshKeyEventListeners() {
+        // 編集ボタン
+        document.querySelectorAll('.edit-ssh-key-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                const keyId = this.dataset.id;
+                fetch(`/api/ssh_keys/${keyId}`)
+                    .then(response => response.json())
+                    .then(key => {
+                        document.getElementById('sshKeyId').value = key.id;
+                        document.getElementById('sshKeyName').value = key.name;
+                        document.getElementById('sshKeyPath').value = key.path;
+                        const addSshKeyModal = new bootstrap.Modal(document.getElementById('addSshKeyModal'));
+                        addSshKeyModal.show();
+                    })
+                    .catch(error => console.error('Error fetching SSH key for edit:', error));
+            });
+        });
+
+        // 削除ボタン
+        document.querySelectorAll('.delete-ssh-key-btn').forEach(button => {
+                button.addEventListener('click', function() {
+                    const keyId = this.dataset.id;
+                    if (confirm('本当にこのSSHキーを削除しますか？')) {
+                        fetch(`/api/ssh_keys/${keyId}`, {
+                            method: 'DELETE'
+                        })
+                        .then(response => {
+                            if (!response.ok) {
+                                return response.json().then(err => { throw err; });
+                            }
+                            // Handle 204 No Content response
+                            if (response.status === 204) {
+                                return {};
+                            }
+                            return response.json();
+                        })
+                        .then(data => {
+                            alert('SSHキーが削除されました！');
+                            loadSshKeysForManagementModal(); // リストを再ロード
+                        })
+                        .catch(error => console.error('Error deleting SSH key:', error));
+                    }
+                });
+            });
+
+        // 一括削除チェックボックスの変更イベント
+        document.querySelectorAll('.ssh-key-checkbox').forEach(checkbox => {
+            checkbox.addEventListener('change', updateBulkDeleteSshKeysButtonVisibility);
+        });
+
+        // 一括削除ボタン
+        const bulkDeleteSshKeysBtn = document.getElementById('bulkDeleteSshKeysBtn');
+        if (bulkDeleteSshKeysBtn) {
+            bulkDeleteSshKeysBtn.addEventListener('click', function() {
+                const selectedKeyIds = [];
+                document.querySelectorAll('.ssh-key-checkbox:checked').forEach(checkbox => {
+                    selectedKeyIds.push(checkbox.dataset.keyId);
+                });
+
+                if (selectedKeyIds.length > 0) {
+                    if (confirm(`${selectedKeyIds.length}個のSSHキーを本当に削除しますか？`)) {
+                        fetch('/api/ssh_keys/bulk_delete', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ ids: selectedKeyIds })
+                        })
+                        .then(response => {
+                            if (!response.ok) {
+                                return response.json().then(err => { throw err; });
+                            }
+                            // Handle 204 No Content response
+                            if (response.status === 204) {
+                                return {};
+                            }
+                            return response.json();
+                        })
+                        .then(data => {
+                            alert('選択されたSSHキーが削除されました！');
+                            loadSshKeysForManagementModal(); // リストを再ロード
+                        })
+                        .catch(error => console.error('Error during bulk delete of SSH keys:', error));
+                    }
+                } else {
+                    alert('削除するSSHキーを選択してください。');
+                }
+            });
+        }
+    }
+
+    function updateBulkDeleteSshKeysButtonVisibility() {
+        const bulkDeleteSshKeysBtn = document.getElementById('bulkDeleteSshKeysBtn');
+        if (bulkDeleteSshKeysBtn) {
+            const checkedCount = document.querySelectorAll('.ssh-key-checkbox:checked').length;
+            bulkDeleteSshKeysBtn.disabled = checkedCount === 0;
+        }
+    }
+
+    // SSHキー管理画面のスクリプトを初期化する関数
+    function initializeSshKeyManagementScripts() {
+        // 「戻る」ボタンのイベントリスナー
+        const backToConfigBtn = document.getElementById('backToConfigBtn');
+        if (backToConfigBtn) {
+            backToConfigBtn.addEventListener('click', function() {
+                // 設定モーダルの内容をリロード
+                const configModalBody = document.getElementById('configModalBody');
+                fetch('/config')
+                    .then(response => response.text())
+                    .then(html => {
+                        configModalBody.innerHTML = html;
+                        initializeConfigModalScripts();
+                        loadServersForConfigModal();
+                        loadExtraImportUrl();
+                    })
+                    .catch(error => console.error('Error reloading config modal content:', error));
+            });
+        }
+
+        // 新しいSSHキーを追加ボタン
+        const addNewSshKeyBtn = document.getElementById('addNewSshKeyBtn');
+        if (addNewSshKeyBtn) {
+            addNewSshKeyBtn.addEventListener('click', function() {
+                // フォームをリセット
+                const sshKeyForm = document.getElementById('sshKeyForm');
+                if(sshKeyForm) sshKeyForm.reset();
+                const sshKeyId = document.getElementById('sshKeyId');
+                if(sshKeyId) sshKeyId.value = '';
+                
+                const addSshKeyModal = new bootstrap.Modal(document.getElementById('addSshKeyModal'));
+                addSshKeyModal.show();
+            });
+        }
+        
+        // SSHキーリストをロード
+        loadSshKeysForManagementModal();
+
+        // SSHキーのアップロード処理
+        const uploadSshKeyFileBtn = document.getElementById('uploadSshKeyFileBtn');
+        if (uploadSshKeyFileBtn) {
+            uploadSshKeyFileBtn.addEventListener('click', function() {
+                const sshKeyUploadInput = document.getElementById('sshKeyUpload');
+                const file = sshKeyUploadInput.files[0];
+                if (!file) {
+                    alert('アップロードするファイルを選択してください。');
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append('file', file);
+
+                fetch('/api/ssh_keys/upload', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        return response.json().then(err => { throw err; });
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    alert('SSHキーがアップロードされました！');
+                    document.getElementById('sshKeyPath').value = data.path; // アップロードされたファイルのパスをセット
+                    sshKeyUploadInput.value = ''; // ファイル選択をクリア
+                })
+                .catch(error => {
+                    console.error('Error uploading SSH key:', error);
+                    alert('SSHキーのアップロードに失敗しました: ' + (error.message || JSON.stringify(error)));
+                });
+            });
+        }
+
+        // SSHキー追加/編集フォームの送信処理
+        const sshKeyForm = document.getElementById('sshKeyForm');
+        if (sshKeyForm) {
+            sshKeyForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const keyId = document.getElementById('sshKeyId').value;
+                const keyName = document.getElementById('sshKeyName').value;
+                const keyPath = document.getElementById('sshKeyPath').value;
+
+                const method = keyId ? 'PUT' : 'POST';
+                const url = keyId ? `/api/ssh_keys/${keyId}` : '/api/ssh_keys';
+
+                const payload = {
+                    id: keyId || `sshkey-${Date.now()}-${Math.floor(Math.random() * 10000)}`, // 新規作成時はIDを生成
+                    name: keyName,
+                    path: keyPath
+                };
+
+                fetch(url, {
+                    method: method,
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        return response.json().then(err => { throw err; });
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    alert('SSHキーが保存されました！');
+                    const addSshKeyModal = bootstrap.Modal.getInstance(document.getElementById('addSshKeyModal'));
+                    addSshKeyModal.hide();
+                    loadSshKeysForManagementModal(); // SSHキーリストを再ロード
+                })
+                .catch(error => {
+                    console.error('Error saving SSH key:', error);
+                    alert('SSHキーの保存に失敗しました: ' + (error.message || JSON.stringify(error)));
+                });
             });
         }
     }
@@ -368,6 +725,7 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(response => response.json())
             .then(servers => {
                 const serverListDiv = document.getElementById('server-list');
+                if (!serverListDiv) return;
                 serverListDiv.innerHTML = ''; // Clear existing content
 
                 servers.forEach(server => {
@@ -410,10 +768,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 function updateBulkDeleteButtonVisibility() {
                     const checkedCount = document.querySelectorAll('.config-server-checkbox:checked').length;
-                    if (checkedCount > 0) {
-                        bulkDeleteServersBtn.disabled = false;
-                    } else {
-                        bulkDeleteServersBtn.disabled = true;
+                    if (bulkDeleteServersBtn) {
+                        bulkDeleteServersBtn.disabled = checkedCount === 0;
                     }
                 }
 
@@ -445,42 +801,111 @@ document.addEventListener('DOMContentLoaded', function() {
                     });
                 });
 
-                // 一括削除ボタンのクリックイベント（設定モーダル内）
-                bulkDeleteServersBtn.addEventListener('click', function() {
-                    const selectedServerIds = [];
-                    document.querySelectorAll('.config-server-checkbox:checked').forEach(checkbox => {
-                        selectedServerIds.push(checkbox.dataset.serverId);
-                    });
-
-                    if (selectedServerIds.length > 0) {
-                        if (confirm(`${selectedServerIds.length}個のサーバーを本当に削除しますか？`)) {
-                            fetch('/bulk_delete_servers', {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json'
-                                },
-                                body: JSON.stringify({ server_ids: selectedServerIds })
-                            })
-                            .then(response => response.json())
-                            .then(data => {
-                                if (data.status === 'success') {
-                                    alert('選択されたサーバーが削除されました！');
-                                    // サーバーリストを再ロードしてUIを更新
-                                    loadServersForConfigModal();
-                                } else {
-                                    alert('サーバーの一括削除に失敗しました: ' + data.message);
-                                }
-                            })
-                            .catch(error => console.error('Error during bulk delete:', error));
-                        }
-                    } else {
-                        alert('削除するサーバーを選択してください。');
-                    }
-                });
-
                 // Pingステータスの更新をここでも呼び出す
                 updatePingStatus();
+
+                // 個別サーバーの編集・削除ボタンのイベントリスナーを再設定
+                attachServerCardEventListeners();
             })
             .catch(error => console.error('Error loading servers for config modal:', error));
+    }
+
+    // 個別サーバーカードの編集・削除ボタンにイベントリスナーをアタッチする関数
+    function attachServerCardEventListeners() {
+        // サーバー編集ボタンのイベントリスナー
+        document.querySelectorAll('.edit-server-btn').forEach(button => {
+            button.removeEventListener('click', handleEditServerClick); // 既存のリスナーを削除
+            button.addEventListener('click', handleEditServerClick); // 新しいリスナーを追加
+        });
+
+        // サーバー削除ボタンのイベントリスナー
+        document.querySelectorAll('.delete-server-btn').forEach(button => {
+            button.removeEventListener('click', handleDeleteServerClick); // 既存のリスナーを削除
+            button.addEventListener('click', handleDeleteServerClick); // 新しいリスナーを追加
+        });
+
+        // 新規サーバー設定ボタンのイベントリスナー
+        document.querySelectorAll('.setup-btn').forEach(button => {
+            button.removeEventListener('click', handleSetupButtonClick); // 既存のリスナーを削除
+            button.addEventListener('click', handleSetupButtonClick); // 新しいリスナーを追加
+        });
+
+        // 削除確認ボタンのイベントリスナー
+        document.querySelectorAll('.confirm-delete-btn').forEach(button => {
+            button.removeEventListener('click', handleConfirmDeleteClick); // 既存のリスナーを削除
+            button.addEventListener('click', handleConfirmDeleteClick); // 新しいリスナーを追加
+        });
+
+        // 削除キャンセルボタンのイベントリスナー
+        document.querySelectorAll('.cancel-delete-btn').forEach(button => {
+            button.removeEventListener('click', handleCancelDeleteClick); // 既存のリスナーを削除
+            button.addEventListener('click', handleCancelDeleteClick); // 新しいリスナーを追加
+        });
+    }
+
+    // サーバー編集フォームの送信処理
+    const editServerForm = document.getElementById('editServerForm');
+    if (editServerForm) {
+        editServerForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const formData = new FormData(editServerForm);
+            const serverId = document.getElementById('editServerId').value;
+            fetch(`/api/servers/${serverId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(Object.fromEntries(formData.entries()))
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => { throw err; });
+                }
+                return response.json();
+            })
+            .then(data => {
+                alert('サーバー情報が更新されました！');
+                const editModal = bootstrap.Modal.getInstance(document.getElementById('editServerModal'));
+                if (editModal) {
+                    editModal.hide();
+                }
+                loadServersForConfigModal(); // サーバーリストを再ロード
+            })
+            .catch(error => {
+                console.error('Error updating server:', error);
+                alert('サーバー情報の更新に失敗しました: ' + (error.message || JSON.stringify(error)));
+            });
+        });
+    }
+
+    // 新規サーバー追加フォームの送信処理
+    const addServerForm = document.getElementById('addServerForm');
+    if (addServerForm) {
+        addServerForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const formData = new FormData(addServerForm);
+            fetch('/api/servers', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(Object.fromEntries(formData.entries()))
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => { throw err; });
+                }
+                return response.json();
+            })
+            .then(data => {
+                alert('サーバーが追加されました！');
+                addServerForm.reset();
+                loadServersForConfigModal(); // サーバーリストを再ロード
+            })
+            .catch(error => {
+                console.error('Error adding server:', error);
+                alert('サーバーの追加に失敗しました: ' + (error.message || JSON.stringify(error)));
+            });
+        });
     }
 });

@@ -62,6 +62,17 @@ body {
     box-shadow: 0 8px 16px rgba(0,0,0,0.2);
 }
 
+/* New and Deleted server card styles */
+.server-card.border-success {
+    border-color: #28a745 !important; /* Green border for new servers */
+    box-shadow: 0 0 15px rgba(40, 167, 69, 0.5) !important;
+}
+
+.server-card.border-danger {
+    border-color: #dc3545 !important; /* Red border for deleted servers */
+    box-shadow: 0 0 15px rgba(220, 53, 69, 0.5) !important;
+}
+
 /* --- カード内部のレイアウト --- */
 .server-card-body {
     position: relative;

@@ -117,5 +117,119 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <!-- Custom JavaScript -->
     <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+    <!-- Server Edit/Add Modal -->
+    <div class="modal fade" id="editServerModal" tabindex="-1" aria-labelledby="editServerModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="editServerModalLabel">サーバーの追加/編集</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="editServerForm">
+                        <input type="hidden" id="editServerId" name="id">
+                        <div class="mb-3">
+                            <label for="editServerName" class="form-label">名前</label>
+                            <input type="text" class="form-control" id="editServerName" name="name" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="editServerType" class="form-label">タイプ</label>
+                            <select class="form-select" id="editServerType" name="type" required>
+                                <option value="node">ノード</option>
+                                <option value="virtual_machine">仮想マシン</option>
+                                <option value="network_device">ネットワークデバイス</option>
+                                <option value="kvm">KVM</option>
+                            </select>
+                        </div>
+                        <div class="mb-3" id="editHostGroup">
+                            <label for="editServerHost" class="form-label">ホスト</label>
+                            <input type="text" class="form-control" id="editServerHost" name="host">
+                        </div>
+                        <div class="mb-3" id="editPortGroup">
+                            <label for="editServerPort" class="form-label">ポート</label>
+                            <input type="number" class="form-control" id="editServerPort" name="port" value="22">
+                        </div>
+                        <div class="mb-3" id="editUrlGroup">
+                            <label for="editServerUrl" class="form-label">URL</label>
+                            <input type="url" class="form-control" id="editServerUrl" name="url">
+                        </div>
+                        <div class="mb-3" id="editUsernameGroup">
+                            <label for="editServerUsername" class="form-label">ユーザー名</label>
+                            <input type="text" class="form-control" id="editServerUsername" name="username">
+                        </div>
+                        <div class="mb-3" id="editAuthMethodGroup">
+                            <label for="editServerAuthMethod" class="form-label">認証方法</label>
+                            <select class="form-select" id="editServerAuthMethod" name="auth_method">
+                                <option value="password">パスワード</option>
+                                <option value="key">SSHキー</option>
+                            </select>
+                        </div>
+                        <div class="mb-3" id="editPasswordGroup">
+                            <label for="editServerPassword" class="form-label">パスワード</label>
+                            <input type="password" class="form-control" id="editServerPassword" name="password">
+                        </div>
+                        <div class="mb-3" id="editSshKeySelectGroup">
+                            <label for="editServerSshKeyId" class="form-label">SSHキー</label>
+                            <select class="form-select" id="editServerSshKeyId" name="ssh_key_id">
+                                <!-- SSH keys will be loaded here by JavaScript -->
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="editServerDescription" class="form-label">説明</label>
+                            <textarea class="form-control" id="editServerDescription" name="description" rows="3"></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label for="editServerTags" class="form-label">タグ (カンマ区切り)</label>
+                            <input type="text" class="form-control" id="editServerTags" name="tags">
+                        </div>
+                        <button type="submit" class="btn btn-primary">変更を保存</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SSH Key Management Modal -->
+    <div class="modal fade" id="sshKeyModal" tabindex="-1" aria-labelledby="sshKeyModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="sshKeyModalLabel">SSHキー管理</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3 d-flex justify-content-between align-items-center">
+                        <button class="btn btn-success" id="addSshKeyBtn">新しいSSHキーを追加</button>
+                        <div>
+                            <button class="btn btn-danger" id="bulkDeleteSshKeysBtn" disabled>選択したSSHキーを削除</button>
+                        </div>
+                    </div>
+                    <div id="sshKeyList" class="list-group mb-4">
+                        <!-- SSH keys will be loaded here -->
+                    </div>
+
+                    <h4>SSHキーの追加/編集</h4>
+                    <form id="sshKeyForm">
+                        <input type="hidden" id="sshKeyId" name="id">
+                        <div class="mb-3">
+                            <label for="sshKeyName" class="form-label">名前</label>
+                            <input type="text" class="form-control" id="sshKeyName" name="name" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="sshKeyPath" class="form-label">パス</label>
+                            <input type="text" class="form-control" id="sshKeyPath" name="path">
+                        </div>
+                        <div class="mb-3">
+                            <label for="sshKeyFile" class="form-label">またはファイルをアップロード</label>
+                            <input type="file" class="form-control" id="sshKeyFile" name="file">
+                        </div>
+                        <button type="submit" class="btn btn-primary">保存</button>
+                        <button type="button" class="btn btn-secondary" id="cancelSshKeyEditBtn" style="display:none;">キャンセル</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
 </body>
 </html>

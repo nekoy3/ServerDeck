@@ -296,6 +296,12 @@ def index():
 def config_page():
     return render_template('config_modal_content.html')
 
+@app.route('/ssh_keys')
+@login_required
+def ssh_keys_page():
+    return render_template('ssh_keys.html')
+
+
 @app.route('/ssh/<server_id>')
 @login_required
 def ssh_terminal(server_id):
@@ -305,8 +311,25 @@ def ssh_terminal(server_id):
 @app.route('/api/servers', methods=['GET'])
 @login_required
 def get_servers():
-    config = load_servers_config()
-    return jsonify(config.get('servers', []))
+    try:
+        config = load_servers_config()
+        return jsonify(config.get('servers', []))
+    except Exception as e:
+        app.logger.error(f"Error getting servers: {e}")
+        return jsonify({"error": f"Failed to get servers: {e}"}), 500
+
+@app.route('/api/servers/<server_id>', methods=['GET'])
+@login_required
+def get_server(server_id):
+    try:
+        config = load_servers_config()
+        server = next((s for s in config.get('servers', []) if s['id'] == server_id), None)
+        if not server:
+            return jsonify({"error": "Server not found"}), 404
+        return jsonify(server)
+    except Exception as e:
+        app.logger.error(f"Error getting server {server_id}: {e}")
+        return jsonify({"error": f"Failed to get server: {e}"}), 500
 
 @app.route('/api/servers', methods=['POST'])
 @login_required
@@ -359,25 +382,34 @@ def delete_server(server_id):
 @app.route('/bulk_delete_servers', methods=['POST'])
 @login_required
 def bulk_delete_servers():
-    data = request.json
-    server_ids_to_delete = data.get('server_ids', [])
-    
-    if not server_ids_to_delete:
-        return jsonify({"error": "No server IDs provided for deletion."}), 400
+    try:
+        data = request.json
+        server_ids_to_delete = data.get('server_ids', [])
+        
+        app.logger.debug(f"Attempting bulk delete for server IDs: {server_ids_to_delete}")
 
-    config = load_servers_config()
-    servers = config.get('servers', [])
-    original_len = len(servers)
-    
-    # Filter out servers that are in the deletion list
-    servers = [s for s in servers if s['id'] not in server_ids_to_delete]
-    
-    if len(servers) == original_len:
-        return jsonify({"error": "No matching servers found for deletion."}), 404
-    
-    config['servers'] = servers
-    save_servers_config(config)
-    return jsonify({"message": f"{original_len - len(servers)} servers deleted."}), 200
+        if not server_ids_to_delete:
+            app.logger.debug("No server IDs provided for deletion (bulk_delete_servers).")
+            return jsonify({"status": "error", "message": "No server IDs provided for deletion."}), 400
+
+        config = load_servers_config()
+        servers = config.get('servers', [])
+        original_len = len(servers)
+        
+        # Filter out servers that are in the deletion list
+        servers = [s for s in servers if s['id'] not in server_ids_to_delete]
+        
+        if len(servers) == original_len:
+            app.logger.debug("No matching servers found for deletion (bulk_delete_servers).")
+            return jsonify({"status": "error", "message": "No matching servers found for deletion."}), 404
+        
+        config['servers'] = servers
+        save_servers_config(config)
+        app.logger.info(f"Successfully deleted {original_len - len(servers)} servers via bulk delete.")
+        return jsonify({"status": "success", "message": f"{original_len - len(servers)} servers deleted."}), 200
+    except Exception as e:
+        app.logger.error(f"Error during bulk_delete_servers: {e}")
+        return jsonify({"status": "error", "message": f"Failed to delete servers: {e}"}), 500
 
 @app.route('/api/extra_import_url', methods=['GET'])
 @login_required
@@ -500,6 +532,19 @@ def add_ssh_key():
     save_ssh_keys_config(config)
     return jsonify(new_key), 201
 
+@app.route('/api/ssh_keys/<key_id>', methods=['GET'])
+@login_required
+def get_ssh_key(key_id):
+    try:
+        config = load_ssh_keys_config()
+        key = next((k for k in config.get('ssh_keys', []) if k['id'] == key_id), None)
+        if not key:
+            return jsonify({"error": "SSH Key not found"}), 404
+        return jsonify(key)
+    except Exception as e:
+        app.logger.error(f"Error getting SSH key {key_id}: {e}")
+        return jsonify({"error": f"Failed to get SSH key: {e}"}), 500
+
 @app.route('/api/ssh_keys/<key_id>', methods=['PUT'])
 @login_required
 def update_ssh_key(key_id):
@@ -542,36 +587,33 @@ def upload_ssh_key_file():
     filepath = os.path.join(UPLOAD_FOLDER, filename)
     file.save(filepath)
     os.chmod(filepath, 0o600);
-    try:
-        paramiko.RSAKey.from_private_key_file(filepath)
-        return jsonify({'path': filepath}), 200
-    except paramiko.PasswordRequiredException:
-        os.remove(filepath);
-        return jsonify({'error': 'SSH key requires a passphrase. Passphrase input is not yet supported.'}), 400
-    except paramiko.SSHException as e:
-        app.logger.error(f"SSHException (RSA check): {e}");
+    # Refactored key validation logic
+    key_types_to_try = (paramiko.RSAKey, paramiko.ECDSAKey, paramiko.Ed25519Key)
+    last_error = None
+
+    for key_type in key_types_to_try:
         try:
-            app.logger.debug("Attempting to load as EdDSA key.");
-            paramiko.EdDSAKey(filename=filepath);
-            return jsonify({'path': filepath}), 200
-        except AttributeError:
-            app.logger.debug("paramiko.EdDSAKey not found, attempting to load as Ed25519Key.");
-            paramiko.Ed25519Key(filename=filepath);
+            key_type.from_private_key_file(filepath)
+            app.logger.info(f"Uploaded key '{filename}' validated as {key_type.__name__}.")
             return jsonify({'path': filepath}), 200
         except paramiko.PasswordRequiredException:
-            os.remove(filepath);
-            return jsonify({'error': 'SSH key requires a passphrase. Passphrase input is not yet supported.'}), 400
-        except paramiko.SSHException as eddsa_e:
-            os.remove(filepath);
-            return jsonify({'error': f'Invalid SSH key format or content: {e} (RSA) / {eddsa_e} (EdDSA)'}), 400
-        except Exception as other_e:
-            app.logger.error(f"General Exception (EdDSA check): {other_e}");
-            os.remove(filepath);
-            return jsonify({'error': f'Failed to process SSH key (EdDSA check): {other_e}'}), 400
-    except Exception as e:
-        app.logger.error(f"General Exception (overall): {e}");
-        os.remove(filepath);
-        return jsonify({'error': f'Failed to process SSH key: {e}'}), 400
+            last_error = 'SSH key requires a passphrase, which is not supported.'
+            # This is a definitive failure, so we break the loop.
+            break
+        except paramiko.SSHException as e:
+            # This key type didn't work, so we'll try the next one.
+            last_error = str(e)
+            continue
+        except Exception as e:
+            # Catch any other unexpected errors during parsing
+            last_error = f"An unexpected error occurred during validation: {e}"
+            continue
+
+    # If we've gone through the whole loop and nothing worked:
+    os.remove(filepath)
+    error_message = f"Invalid or unsupported SSH key format. Last error: {last_error}"
+    app.logger.error(f"Failed to validate key '{filename}'. Reason: {error_message}")
+    return jsonify({'error': error_message}), 400
 
 @app.route('/api/ssh_keys/bulk_delete', methods=['POST'])
 @login_required
