@@ -495,101 +495,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     sshKeyListDiv.insertAdjacentHTML('beforeend', keyItemHtml);
                 });
 
-                attachSshKeyEventListeners();
                 updateBulkDeleteSshKeysButtonVisibility();
             })
             .catch(error => console.error('Error loading SSH keys:', error));
-    }
-
-    function attachSshKeyEventListeners() {
-        // 編集ボタン
-        document.querySelectorAll('.edit-ssh-key-btn').forEach(button => {
-            button.addEventListener('click', function() {
-                const keyId = this.dataset.id;
-                fetch(`/api/ssh_keys/${keyId}`)
-                    .then(response => response.json())
-                    .then(key => {
-                        document.getElementById('sshKeyId').value = key.id;
-                        document.getElementById('sshKeyName').value = key.name;
-                        document.getElementById('sshKeyPath').value = key.path;
-                        const addSshKeyModal = new bootstrap.Modal(document.getElementById('addSshKeyModal'));
-                        addSshKeyModal.show();
-                    })
-                    .catch(error => console.error('Error fetching SSH key for edit:', error));
-            });
-        });
-
-        // 削除ボタン
-        document.querySelectorAll('.delete-ssh-key-btn').forEach(button => {
-                button.addEventListener('click', function() {
-                    const keyId = this.dataset.id;
-                    if (confirm('本当にこのSSHキーを削除しますか？')) {
-                        fetch(`/api/ssh_keys/${keyId}`, {
-                            method: 'DELETE'
-                        })
-                        .then(response => {
-                            if (!response.ok) {
-                                return response.json().then(err => { throw err; });
-                            }
-                            // Handle 204 No Content response
-                            if (response.status === 204) {
-                                return {};
-                            }
-                            return response.json();
-                        })
-                        .then(data => {
-                            alert('SSHキーが削除されました！');
-                            loadSshKeysForManagementModal(); // リストを再ロード
-                        })
-                        .catch(error => console.error('Error deleting SSH key:', error));
-                    }
-                });
-            });
-
-        // 一括削除チェックボックスの変更イベント
-        document.querySelectorAll('.ssh-key-checkbox').forEach(checkbox => {
-            checkbox.addEventListener('change', updateBulkDeleteSshKeysButtonVisibility);
-        });
-
-        // 一括削除ボタン
-        const bulkDeleteSshKeysBtn = document.getElementById('bulkDeleteSshKeysBtn');
-        if (bulkDeleteSshKeysBtn) {
-            bulkDeleteSshKeysBtn.addEventListener('click', function() {
-                const selectedKeyIds = [];
-                document.querySelectorAll('.ssh-key-checkbox:checked').forEach(checkbox => {
-                    selectedKeyIds.push(checkbox.dataset.keyId);
-                });
-
-                if (selectedKeyIds.length > 0) {
-                    if (confirm(`${selectedKeyIds.length}個のSSHキーを本当に削除しますか？`)) {
-                        fetch('/api/ssh_keys/bulk_delete', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json'
-                            },
-                            body: JSON.stringify({ ids: selectedKeyIds })
-                        })
-                        .then(response => {
-                            if (!response.ok) {
-                                return response.json().then(err => { throw err; });
-                            }
-                            // Handle 204 No Content response
-                            if (response.status === 204) {
-                                return {};
-                            }
-                            return response.json();
-                        })
-                        .then(data => {
-                            alert('選択されたSSHキーが削除されました！');
-                            loadSshKeysForManagementModal(); // リストを再ロード
-                        })
-                        .catch(error => console.error('Error during bulk delete of SSH keys:', error));
-                    }
-                } else {
-                    alert('削除するSSHキーを選択してください。');
-                }
-            });
-        }
     }
 
     function updateBulkDeleteSshKeysButtonVisibility() {
@@ -620,7 +528,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
 
-        // 新しいSSHキーを追加ボタン
+        // 「新しいSSHキーを追加」ボタン
         const addNewSshKeyBtn = document.getElementById('addNewSshKeyBtn');
         if (addNewSshKeyBtn) {
             addNewSshKeyBtn.addEventListener('click', function() {
@@ -634,8 +542,79 @@ document.addEventListener('DOMContentLoaded', function() {
                 addSshKeyModal.show();
             });
         }
+
+        // SSHキーリストの親要素にイベントリスナーを設定（イベントデリゲーション）
+        const sshKeyListDiv = document.getElementById('ssh-key-list');
+        if (sshKeyListDiv) {
+            sshKeyListDiv.addEventListener('click', function(event) {
+                const target = event.target;
+                const keyId = target.dataset.id;
+
+                // 編集ボタン
+                if (target.classList.contains('edit-ssh-key-btn')) {
+                    fetch(`/api/ssh_keys/${keyId}`)
+                        .then(response => response.json())
+                        .then(key => {
+                            document.getElementById('sshKeyId').value = key.id;
+                            document.getElementById('sshKeyName').value = key.name;
+                            document.getElementById('sshKeyPath').value = key.path;
+                            const addSshKeyModal = new bootstrap.Modal(document.getElementById('addSshKeyModal'));
+                            addSshKeyModal.show();
+                        })
+                        .catch(error => console.error('Error fetching SSH key for edit:', error));
+                }
+
+                // 削除ボタン
+                if (target.classList.contains('delete-ssh-key-btn')) {
+                    if (confirm('本当にこのSSHキーを削除しますか？')) {
+                        fetch(`/api/ssh_keys/${keyId}`, {
+                            method: 'DELETE'
+                        })
+                        .then(response => {
+                            if (!response.ok) {
+                                return response.json().then(err => { throw err; });
+                            }
+                            if (response.status === 204) { return {}; }
+                            return response.json();
+                        })
+                        .then(() => {
+                            alert('SSHキーが削除されました！');
+                            loadSshKeysForManagementModal(); // リストを再ロード
+                        })
+                        .catch(error => console.error('Error deleting SSH key:', error));
+                    }
+                }
+            });
+
+            sshKeyListDiv.addEventListener('change', function(event) {
+                if (event.target.classList.contains('ssh-key-checkbox')) {
+                    updateBulkDeleteSshKeysButtonVisibility();
+                }
+            });
+        }
+
+        // 一括削除ボタン
+        const bulkDeleteSshKeysBtn = document.getElementById('bulkDeleteSshKeysBtn');
+        if (bulkDeleteSshKeysBtn) {
+            bulkDeleteSshKeysBtn.addEventListener('click', function() {
+                const selectedKeyIds = Array.from(document.querySelectorAll('.ssh-key-checkbox:checked')).map(cb => cb.dataset.keyId);
+                if (selectedKeyIds.length > 0 && confirm(`${selectedKeyIds.length}個のSSHキーを本当に削除しますか？`)) {
+                    fetch('/api/ssh_keys/bulk_delete', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ ids: selectedKeyIds })
+                    })
+                    .then(response => response.ok ? response.json() : response.json().then(err => { throw err; }))
+                    .then(() => {
+                        alert('選択されたSSHキーが削除されました！');
+                        loadSshKeysForManagementModal(); // リストを再ロード
+                    })
+                    .catch(error => console.error('Error during bulk delete of SSH keys:', error));
+                }
+            });
+        }
         
-        // SSHキーリストをロード
+        // SSHキーリストを初回ロード
         loadSshKeysForManagementModal();
 
         // SSHキーのアップロード処理
@@ -658,7 +637,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 })
                 .then(response => {
                     if (!response.ok) {
-                        return response.json().then(err => { throw err; });
+                        return response.json().then(err => { throw new Error(err.error || 'Unknown error'); });
                     }
                     return response.json();
                 })
@@ -669,7 +648,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 })
                 .catch(error => {
                     console.error('Error uploading SSH key:', error);
-                    alert('SSHキーのアップロードに失敗しました: ' + (error.message || JSON.stringify(error)));
+                    alert('SSHキーのアップロードに失敗しました: ' + error.message);
                 });
             });
         }
