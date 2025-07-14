@@ -658,49 +658,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     serverListDiv.insertAdjacentHTML('beforeend', serverCardHtml);
                 });
 
-                // サーバー選択機能の初期化（設定モーダル内）
-                const bulkDeleteServersBtn = document.getElementById('bulkDeleteServersBtn');
-                const configServerCheckboxes = document.querySelectorAll('.config-server-checkbox');
-
-                function updateBulkDeleteButtonVisibility() {
-                    const checkedCount = document.querySelectorAll('.config-server-checkbox:checked').length;
-                    if (bulkDeleteServersBtn) {
-                        bulkDeleteServersBtn.disabled = checkedCount === 0;
-                    }
-                }
-
-                configServerCheckboxes.forEach(checkbox => {
-                    checkbox.addEventListener('change', function() {
-                        const serverCard = this.closest('.config-server-card');
-                        if (this.checked) {
-                            serverCard.classList.add('selected');
-                        } else {
-                            serverCard.classList.remove('selected');
-                        }
-                        updateBulkDeleteButtonVisibility();
-                    });
-                });
-
-                // パネルクリックでチェックボックスをトグル（設定モーダル内）
-                document.querySelectorAll('.config-server-card .server-card-body').forEach(cardBody => {
-                    cardBody.addEventListener('click', function(event) {
-                        // チェックボックス自体がクリックされた場合は何もしない
-                        if (event.target.classList.contains('config-server-checkbox')) {
-                            return;
-                        }
-                        const checkbox = this.querySelector('.config-server-checkbox');
-                        if (checkbox) {
-                            checkbox.checked = !checkbox.checked;
-                            // 手動でchangeイベントを発火させて、selectedクラスのトグルとボタンの表示更新を行う
-                            checkbox.dispatchEvent(new Event('change'));
-                        }
-                    });
-                });
-
                 // Pingステータスの更新をここでも呼び出す
                 updatePingStatus();
 
-                // 個別サーバーの編集・削除ボタンのイベントリスナーを再設定
+                // 個別サーバーの編集・削除ボタン、および一括削除関連のイベントリスナーを再設定
                 attachServerCardEventListeners();
             })
             .catch(error => console.error('Error loading servers for config modal:', error));
@@ -737,6 +698,78 @@ document.addEventListener('DOMContentLoaded', function() {
             button.removeEventListener('click', handleCancelDeleteClick); // 既存のリスナーを削除
             button.addEventListener('click', handleCancelDeleteClick); // 新しいリスナーを追加
         });
+
+        // --- 一括削除ボタンとチェックボックスのイベントリスナー --- 
+        const bulkDeleteServersBtn = document.getElementById('bulkDeleteServersBtn');
+
+        function updateBulkDeleteButtonVisibility() {
+            const checkedCount = document.querySelectorAll('.config-server-checkbox:checked').length;
+            if (bulkDeleteServersBtn) {
+                bulkDeleteServersBtn.disabled = checkedCount === 0;
+            }
+        }
+
+        // チェックボックスのイベントリスナーを再設定
+        document.querySelectorAll('.config-server-checkbox').forEach(checkbox => {
+            checkbox.removeEventListener('change', updateBulkDeleteButtonVisibility); // 既存のリスナーを削除
+            checkbox.addEventListener('change', updateBulkDeleteButtonVisibility); // 新しいリスナーを追加
+        });
+
+        // パネルクリックでチェックボックスをトグル（設定モーダル内）
+        document.querySelectorAll('.config-server-card .server-card-body').forEach(cardBody => {
+            // 既存のリスナーを削除（もしあれば）
+            cardBody.removeEventListener('click', function(event) {
+                if (event.target.classList.contains('config-server-checkbox')) {
+                    return;
+                }
+                const checkbox = this.querySelector('.config-server-checkbox');
+                if (checkbox) {
+                    checkbox.checked = !checkbox.checked;
+                    checkbox.dispatchEvent(new Event('change'));
+                }
+            });
+            // 新しいリスナーを追加
+            cardBody.addEventListener('click', function(event) {
+                // チェックボックス自体がクリックされた場合は何もしない
+                if (event.target.classList.contains('config-server-checkbox')) {
+                    return;
+                }
+                const checkbox = this.querySelector('.config-server-checkbox');
+                if (checkbox) {
+                    checkbox.checked = !checkbox.checked;
+                    // 手動でchangeイベントを発火させて、selectedクラスのトグルとボタンの表示更新を行う
+                    checkbox.dispatchEvent(new Event('change'));
+                }
+            });
+        });
+
+        // 一括削除ボタンのイベントリスナー
+        if (bulkDeleteServersBtn) {
+            // 既存のリスナーを削除（もしあれば）
+            bulkDeleteServersBtn.removeEventListener('click', handleBulkDeleteServersClick);
+            bulkDeleteServersBtn.addEventListener('click', handleBulkDeleteServersClick);
+        }
+
+        // 初回ロード時にボタンの状態を更新
+        updateBulkDeleteButtonVisibility();
+    }
+
+    // 一括削除ボタンのクリックハンドラを定義
+    function handleBulkDeleteServersClick() {
+        const selectedServerIds = Array.from(document.querySelectorAll('.config-server-checkbox:checked')).map(cb => cb.dataset.serverId);
+        if (selectedServerIds.length > 0 && confirm(`${selectedServerIds.length}個のサーバーを本当に削除しますか？`)) {
+            fetch('/bulk_delete_servers', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ server_ids: selectedServerIds })
+            })
+            .then(response => response.ok ? response.json() : response.json().then(err => { throw err; }))
+            .then(() => {
+                alert('選択されたサーバーが削除されました！');
+                loadServersForConfigModal(); // サーバーリストを再ロード
+            })
+            .catch(error => console.error('Error during bulk delete of servers:', error));
+        }
     }
 
     // サーバー編集フォームの送信処理

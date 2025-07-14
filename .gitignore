@@ -48,3 +48,6 @@ config/backup/
 # Extra Import and Settings files
 config/extra_import.yaml
 config/settings.yaml
+
+# Flask-Session filesystem storage
+config/flask_session/

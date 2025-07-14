@@ -2,6 +2,7 @@ import sys
 import logging
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for, flash, send_from_directory, make_response
 from flask_socketio import SocketIO, emit
+from flask_session import Session # Flask-Sessionをインポート
 import yaml
 import os
 import paramiko
@@ -12,7 +13,7 @@ import sys
 from werkzeug.utils import secure_filename
 from werkzeug.security import check_password_hash
 from functools import wraps
-from datetime import datetime
+from datetime import datetime, timedelta # timedeltaをインポート
 import shutil
 import requests
 import random
@@ -21,6 +22,13 @@ app = Flask(__name__)
 # IMPORTANT: In a production environment, use a strong, randomly generated secret key
 # and load it from an environment variable or a secure configuration file.
 app.config['SECRET_KEY'] = os.urandom(24)
+
+# Flask-Sessionの設定
+app.config["SESSION_TYPE"] = "filesystem"
+app.config["SESSION_FILE_DIR"] = os.path.join(os.path.dirname(__file__), 'config', 'flask_session')
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=1) # セッションの有効期限を1時間に設定
+Session(app) # Flask-Sessionを初期化
+
 socketio = SocketIO(app)
 
 # --- Ping Utility ---
@@ -138,8 +146,14 @@ def save_ssh_keys_config(config_data):
 def load_users_config():
     if os.path.exists(USERS_CONFIG_PATH):
         with open(USERS_CONFIG_PATH, 'r') as f:
-            return yaml.safe_load(f) or {"users": []}
+            config = yaml.safe_load(f) or {"users": []}
+            return config
     return {"users": []}
+
+def save_users_config(config_data):
+    os.makedirs(CONFIG_DIR, exist_ok=True);
+    with open(USERS_CONFIG_PATH, 'w') as f:
+        yaml.dump(config_data, f, indent=2, sort_keys=False)
 
 def load_extra_import_config():
     if os.path.exists(EXTRA_IMPORT_CONFIG_PATH):
@@ -249,6 +263,7 @@ def login_required(f):
     def decorated_function(*args, **kwargs):
         if 'username' not in session:
             return redirect(url_for('login', next=request.url))
+        # Flask-Sessionがセッションの永続化と有効期限を管理するため、last_activeのチェックは不要
         return f(*args, **kwargs)
     return decorated_function
 
@@ -265,6 +280,7 @@ def login():
         
         if user and check_password_hash(user['password_hash'], password):
             session['username'] = user['username']
+            # Flask-Sessionがセッションの永続化と有効期限を管理するため、last_activeの更新は不要
             flash('Logged in successfully.', 'success')
             next_page = request.args.get('next')
             return redirect(next_page or url_for('index'))
