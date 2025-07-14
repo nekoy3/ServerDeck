@@ -7,17 +7,17 @@
             <button class="nav-link" id="backup-tab" data-bs-toggle="tab" data-bs-target="#backup-pane" type="button" role="tab" aria-controls="backup-pane" aria-selected="false">バックアップ</button>
         </li>
         <li class="nav-item" role="presentation">
+            <button class="nav-link" id="ssh-keys-tab" data-bs-toggle="tab" data-bs-target="#ssh-keys-pane" type="button" role="tab" aria-controls="ssh-keys-pane" aria-selected="false">SSHキー管理</button>
+        </li>
+        <li class="nav-item" role="presentation">
             <button class="nav-link" id="extra-import-tab" data-bs-toggle="tab" data-bs-target="#extra-import-pane" type="button" role="tab" aria-controls="extra-import-pane" aria-selected="false">Extra Import</button>
         </li>
     </ul>
     <div class="tab-content" id="configTabsContent">
         <div class="tab-pane fade show active" id="servers-pane" role="tabpanel" aria-labelledby="servers-tab" tabindex="0">
             <h2 class="mb-4">サーバー設定</h2>
-            <div class="mb-3 d-flex justify-content-between align-items-center">
-                <button type="button" class="btn btn-sm btn-outline-secondary" id="manageSshKeysBtn">SSHキーを管理</button>
-                <div>
-                    <button class="btn btn-danger" id="bulkDeleteServersBtn" disabled>選択したサーバーを削除</button>
-                </div>
+            <div class="mb-3 d-flex justify-content-end align-items-center">
+                <button class="btn btn-danger" id="bulkDeleteServersBtn" disabled>選択したサーバーを削除</button>
             </div>
             <div class="row" id="server-list">
                 <!-- Server cards will be loaded here by JavaScript -->
@@ -55,6 +55,9 @@
                     <button id="export-config-btn" class="btn btn-success">エクスポート</button>
                 </div>
             </div>
+        </div>
+        <div class="tab-pane fade" id="ssh-keys-pane" role="tabpanel" aria-labelledby="ssh-keys-tab" tabindex="0">
+            <!-- SSH Key management content will be loaded here -->
         </div>
         <div class="tab-pane fade" id="extra-import-pane" role="tabpanel" aria-labelledby="extra-import-tab" tabindex="0">
             <h2 class="mb-4">Extra Import設定</h2>

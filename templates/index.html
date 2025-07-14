@@ -153,41 +153,47 @@
                             <label for="editServerUrl" class="form-label">URL</label>
                             <input type="url" class="form-control" id="editServerUrl" name="url">
                         </div>
-                        <div class="mb-3" id="editUsernameGroup">
-                            <label for="editServerUsername" class="form-label">ユーザー名</label>
-                            <input type="text" class="form-control" id="editServerUsername" name="username">
-                        </div>
-                        <div class="mb-3" id="editAuthMethodGroup">
-                            <label for="editServerAuthMethod" class="form-label">認証方法</label>
-                            <select class="form-select" id="editServerAuthMethod" name="auth_method">
+                        <div class="mb-3">
+                            <label for="editAuthMethod" class="form-label">認証方法</label>
+                            <select class="form-select" id="editAuthMethod" name="auth_method">
                                 <option value="password">パスワード</option>
-                                <option value="key">SSHキー</option>
+                                <option value="ssh_key">SSHキー</option>
                             </select>
                         </div>
-                        <div class="mb-3" id="editPasswordGroup">
-                            <label for="editServerPassword" class="form-label">パスワード</label>
-                            <input type="password" class="form-control" id="editServerPassword" name="password">
+
+                        <div id="editPasswordFields">
+                            <div class="mb-3">
+                                <label for="editServerUsername" class="form-label">ユーザー名</label>
+                                <input type="text" class="form-control" id="editServerUsername" name="username">
+                            </div>
+                            <div class="mb-3">
+                                <label for="editServerPassword" class="form-label">パスワード</label>
+                                <input type="password" class="form-control" id="editServerPassword" name="password">
+                            </div>
                         </div>
-                        <div class="mb-3" id="editSshKeySelectGroup">
-                            <label for="editServerSshKeyId" class="form-label">SSHキー</label>
-                            <select class="form-select" id="editServerSshKeyId" name="ssh_key_id">
-                                <!-- SSH keys will be loaded here by JavaScript -->
-                            </select>
+
+                        <div id="editSshKeyFields" style="display: none;">
+                            <div class="mb-3">
+                                <label for="editServerUsernameSsh" class="form-label">ユーザー名</label>
+                                <input type="text" class="form-control" id="editServerUsernameSsh" name="username_ssh">
+                            </div>
+                            <div class="mb-3">
+                                <label for="editServerSshKeyId" class="form-label">SSHキー</label>
+                                <select class="form-select" id="editServerSshKeyId" name="ssh_key_id">
+                                    <!-- SSH keys will be loaded here -->
+                                </select>
+                            </div>
                         </div>
-                        <div class="mb-3">
-                            <label for="editServerDescription" class="form-label">説明</label>
-                            <textarea class="form-control" id="editServerDescription" name="description" rows="3"></textarea>
-                        </div>
-                        <div class="mb-3">
-                            <label for="editServerTags" class="form-label">タグ (カンマ区切り)</label>
-                            <input type="text" class="form-control" id="editServerTags" name="tags">
-                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
                         <button type="submit" class="btn btn-primary">変更を保存</button>
-                    </form>
-                </div>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
+</div>
 
     <!-- SSH Key Management Modal -->
     <div class="modal fade" id="sshKeyModal" tabindex="-1" aria-labelledby="sshKeyModalLabel" aria-hidden="true">

@@ -77,58 +77,93 @@ document.addEventListener('DOMContentLoaded', function() {
     updatePingStatus();
     setInterval(updatePingStatus, 5000);
 
+    // --- SSHキーのドロップダウンをロードする ---
+    function loadSshKeysForEditModal(selectedKeyId) {
+        const sshKeySelect = document.getElementById('editServerSshKeyId');
+        if (!sshKeySelect) return;
+
+        fetch('/api/ssh_keys')
+            .then(response => response.json())
+            .then(keys => {
+                sshKeySelect.innerHTML = '<option value="">SSHキーを選択...</option>'; // Reset
+                keys.forEach(key => {
+                    const option = document.createElement('option');
+                    option.value = key.id;
+                    option.textContent = key.name;
+                    if (key.id === selectedKeyId) {
+                        option.selected = true;
+                    }
+                    sshKeySelect.appendChild(option);
+                });
+            })
+            .catch(error => console.error('Error loading SSH keys for modal:', error));
+    }
+
+    // --- 認証フィールドの表示を切り替える ---
+    function toggleAuthFields(authMethod) {
+        const passwordFields = document.getElementById('editPasswordFields');
+        const sshKeyFields = document.getElementById('editSshKeyFields');
+        const usernameInput = document.getElementById('editServerUsername');
+        const sshUsernameInput = document.getElementById('editServerUsernameSsh');
+
+        if (authMethod === 'ssh_key') {
+            if (passwordFields) passwordFields.style.display = 'none';
+            if (sshKeyFields) sshKeyFields.style.display = 'block';
+            // SSHキーのユーザー名をメインのユーザー名フィールドに同期
+            if (usernameInput) sshUsernameInput.value = usernameInput.value;
+        } else { // password or default
+            if (passwordFields) passwordFields.style.display = 'block';
+            if (sshKeyFields) sshKeyFields.style.display = 'none';
+        }
+    }
+
     // イベントハンドラー関数を定義
     function handleEditServerClick() {
         const serverId = this.dataset.id;
         fetch(`/api/servers/${serverId}`)
-            .then(response => {
-                if (!response.ok) {
-                    return response.json().then(err => { throw err; });
-                }
-                return response.json();
-            })
+            .then(response => response.ok ? response.json() : Promise.reject(response))
             .then(server => {
-                if (server) {
-                    const editModalElement = document.getElementById('editServerModal');
-                    const editModal = new bootstrap.Modal(editModalElement);
+                const editModalElement = document.getElementById('editServerModal');
+                const editModal = new bootstrap.Modal(editModalElement);
 
-                    // Use a one-time event listener for when the modal is fully shown
-                    editModalElement.addEventListener('shown.bs.modal', function populateModalFields() {
-                        const editServerId = document.getElementById('editServerId');
-                        if (editServerId) editServerId.value = server.id;
-                        const editServerName = document.getElementById('editServerName');
-                        if (editServerName) editServerName.value = server.name;
-                        const editServerHost = document.getElementById('editServerHost');
-                        if (editServerHost) editServerHost.value = server.host;
-                        const editServerPort = document.getElementById('editServerPort');
-                        if (editServerPort) editServerPort.value = server.port;
-                        const editServerType = document.getElementById('editServerType');
-                        if (editServerType) editServerType.value = server.type;
-                        const editServerUrl = document.getElementById('editServerUrl');
-                        if (editServerUrl) editServerUrl.value = server.url || '';
-                        const editServerDescription = document.getElementById('editServerDescription');
-                        if (editServerDescription) editServerDescription.value = server.description || '';
-                        const editServerTags = document.getElementById('editServerTags');
-                        if (editServerTags) editServerTags.value = server.tags ? server.tags.join(', ') : '';
-                        const editServerUsername = document.getElementById('editServerUsername');
-                        if (editServerUsername) editServerUsername.value = server.username || '';
-                        const editServerPassword = document.getElementById('editServerPassword');
-                        if (editServerPassword) editServerPassword.value = server.password || '';
-                        const editServerSshKeyPath = document.getElementById('editServerSshKeyPath');
-                        if (editServerSshKeyPath) editServerSshKeyPath.value = server.ssh_key_path || '';
-                        const editServerSshKeyPassphrase = document.getElementById('editServerSshKeyPassphrase');
-                        if (editServerSshKeyPassphrase) editServerSshKeyPassphrase.value = server.ssh_key_passphrase || '';
+                // モーダルが表示される直前にフィールドを設定
+                document.getElementById('editServerId').value = server.id;
+                document.getElementById('editServerName').value = server.name;
+                document.getElementById('editServerHost').value = server.host || '';
+                document.getElementById('editServerPort').value = server.port || '22';
+                document.getElementById('editServerType').value = server.type;
+                document.getElementById('editServerUrl').value = server.url || '';
+                document.getElementById('editServerDescription').value = server.description || '';
+                document.getElementById('editServerTags').value = server.tags ? server.tags.join(', ') : '';
+                
+                // 認証方法を設定
+                const authMethodSelect = document.getElementById('editAuthMethod');
+                const usernameInput = document.getElementById('editServerUsername');
+                const sshUsernameInput = document.getElementById('editServerUsernameSsh');
+                const passwordInput = document.getElementById('editServerPassword');
 
-                        // Remove the event listener after it's executed once
-                        editModalElement.removeEventListener('shown.bs.modal', populateModalFields);
-                    });
+                // サーバーデータに基づいて認証方法を設定
+                const authMethod = server.auth_method || (server.ssh_key_id ? 'ssh_key' : 'password');
+                authMethodSelect.value = authMethod;
+                
+                usernameInput.value = server.username || '';
+                sshUsernameInput.value = server.username || '';
+                passwordInput.value = server.password || '';
 
-                    editModal.show();
-                }
+                // SSHキーのリストをロードし、サーバーのキーを選択
+                loadSshKeysForEditModal(server.ssh_key_id);
+
+                // 初期表示を正しく設定
+                toggleAuthFields(authMethod);
+
+                // 認証方法の変更イベントリスナーを設定
+                authMethodSelect.onchange = () => toggleAuthFields(authMethodSelect.value);
+
+                editModal.show();
             })
             .catch(error => {
                 console.error('Error fetching server data:', error);
-                alert('サーバーデータの取得に失敗しました: ' + (error.message || JSON.stringify(error)));
+                alert('サーバーデータの取得に失敗しました。');
             });
     }
 
@@ -240,20 +275,22 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function initializeConfigModalScripts() {
-        // 「SSHキーを管理」ボタンのクリックイベント
-        const manageSshKeysBtn = document.getElementById('manageSshKeysBtn');
-        if (manageSshKeysBtn) {
-            manageSshKeysBtn.addEventListener('click', function(e) {
-                e.preventDefault(); // デフォルトのモーダル表示をキャンセル
-                const configModalBody = document.getElementById('configModalBody');
-                fetch('/ssh_keys') // SSHキー管理用のHTMLをフェッチ
-                    .then(response => response.text())
-                    .then(html => {
-                        configModalBody.innerHTML = html;
-                        initializeSshKeyManagementScripts(); // SSHキー管理画面用のスクリプトを初期化
-                    })
-                    .catch(error => console.error('Error loading SSH key management content:', error));
-            });
+        // SSHキー管理タブのイベントリスナー
+        const sshKeysTab = document.getElementById('ssh-keys-tab');
+        if (sshKeysTab) {
+            sshKeysTab.addEventListener('shown.bs.tab', function () {
+                const sshKeysPane = document.getElementById('ssh-keys-pane');
+                // コンテンツがまだロードされていない場合のみロードする
+                if (sshKeysPane && sshKeysPane.innerHTML.trim() === '') {
+                    fetch('/ssh_keys_content')
+                        .then(response => response.text())
+                        .then(html => {
+                            sshKeysPane.innerHTML = html;
+                            initializeSshKeyManagementScripts();
+                        })
+                        .catch(error => console.error('Error loading SSH keys content:', error));
+                }
+            }, { once: true }); // 一度だけ実行
         }
 
         // サーバー設定タブのコンテンツをロードする関数
@@ -510,24 +547,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // SSHキー管理画面のスクリプトを初期化する関数
     function initializeSshKeyManagementScripts() {
-        // 「戻る」ボタンのイベントリスナー
-        const backToConfigBtn = document.getElementById('backToConfigBtn');
-        if (backToConfigBtn) {
-            backToConfigBtn.addEventListener('click', function() {
-                // 設定モーダルの内容をリロード
-                const configModalBody = document.getElementById('configModalBody');
-                fetch('/config')
-                    .then(response => response.text())
-                    .then(html => {
-                        configModalBody.innerHTML = html;
-                        initializeConfigModalScripts();
-                        loadServersForConfigModal();
-                        loadExtraImportUrl();
-                    })
-                    .catch(error => console.error('Error reloading config modal content:', error));
-            });
-        }
-
         // 「新しいSSHキーを追加」ボタン
         const addNewSshKeyBtn = document.getElementById('addNewSshKeyBtn');
         if (addNewSshKeyBtn) {
@@ -827,64 +846,42 @@ document.addEventListener('DOMContentLoaded', function() {
     if (editServerForm) {
         editServerForm.addEventListener('submit', function(e) {
             e.preventDefault();
-            const formData = new FormData(editServerForm);
             const serverId = document.getElementById('editServerId').value;
+            const authMethod = document.getElementById('editAuthMethod').value;
+            
+            const formData = new FormData(editServerForm);
+            const payload = Object.fromEntries(formData.entries());
+
+            if (authMethod === 'ssh_key') {
+                payload.username = payload.username_ssh;
+                delete payload.username_ssh;
+                delete payload.password;
+            } else {
+                delete payload.username_ssh;
+                delete payload.ssh_key_id;
+            }
+
             fetch(`/api/servers/${serverId}`, {
                 method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(Object.fromEntries(formData.entries()))
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
             })
-            .then(response => {
-                if (!response.ok) {
-                    return response.json().then(err => { throw err; });
-                }
-                return response.json();
-            })
-            .then(data => {
+            .then(response => response.ok ? response.json() : Promise.reject('サーバー情報の更新に失敗しました。'))
+            .then(() => {
                 alert('サーバー情報が更新されました！');
                 const editModal = bootstrap.Modal.getInstance(document.getElementById('editServerModal'));
                 if (editModal) {
                     editModal.hide();
                 }
-                loadServersForConfigModal(); // サーバーリストを再ロード
+                location.reload(); // ページをリロードして変更を反映
             })
             .catch(error => {
                 console.error('Error updating server:', error);
-                alert('サーバー情報の更新に失敗しました: ' + (error.message || JSON.stringify(error)));
+                alert(error);
             });
         });
     }
 
-    // 新規サーバー追加フォームの送信処理
-    const addServerForm = document.getElementById('addServerForm');
-    if (addServerForm) {
-        addServerForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            const formData = new FormData(addServerForm);
-            fetch('/api/servers', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(Object.fromEntries(formData.entries()))
-            })
-            .then(response => {
-                if (!response.ok) {
-                    return response.json().then(err => { throw err; });
-                }
-                return response.json();
-            })
-            .then(data => {
-                alert('サーバーが追加されました！');
-                addServerForm.reset();
-                loadServersForConfigModal(); // サーバーリストを再ロード
-            })
-            .catch(error => {
-                console.error('Error adding server:', error);
-                alert('サーバーの追加に失敗しました: ' + (error.message || JSON.stringify(error)));
-            });
-        });
-    }
+    // メインページのサーバーカードにイベントリスナーを設定
+    attachServerCardEventListeners();
 });
