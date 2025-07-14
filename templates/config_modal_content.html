@@ -57,7 +57,40 @@
             </div>
         </div>
         <div class="tab-pane fade" id="ssh-keys-pane" role="tabpanel" aria-labelledby="ssh-keys-tab" tabindex="0">
-            <!-- SSH Key management content will be loaded here -->
+            <div class="container-fluid" id="ssh-key-management-content">
+                <h2 class="mb-3">SSHキー管理</h2>
+                <div id="ssh-key-list-view">
+                    <div class="mb-3">
+                        <button type="button" class="btn btn-success" id="addNewSshKeyBtn">新しいSSHキーを追加</button>
+                        <button type="button" class="btn btn-danger" id="bulkDeleteSshKeysBtn" disabled>選択したSSHキーを削除</button>
+                    </div>
+                    <div id="ssh-key-list" class="list-group">
+                        <!-- SSH keys will be loaded here by JavaScript -->
+                    </div>
+                </div>
+
+                <div id="ssh-key-form-view" class="d-none">
+                    <h3 class="mb-3" id="sshKeyFormTitle">SSHキーを追加/編集</h3>
+                    <form id="sshKeyForm">
+                        <input type="hidden" id="sshKeyId" name="id">
+                        <div class="mb-3">
+                            <label for="sshKeyName" class="form-label">名前</label>
+                            <input type="text" class="form-control" id="sshKeyName" name="name" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="sshKeyPath" class="form-label">パス</label>
+                            <input type="text" class="form-control" id="sshKeyPath" name="path" placeholder="/path/to/your/ssh/key" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="sshKeyUpload" class="form-label">またはファイルをアップロード</label>
+                            <input class="form-control" type="file" id="sshKeyUpload" accept=".pem,.key,.rsa">
+                            <button type="button" class="btn btn-sm btn-secondary mt-2" id="uploadSshKeyFileBtn">アップロード</button>
+                        </div>
+                        <button type="submit" class="btn btn-primary">保存</button>
+                        <button type="button" class="btn btn-secondary" id="cancelSshKeyFormBtn">キャンセル</button>
+                    </form>
+                </div>
+            </div>
         </div>
         <div class="tab-pane fade" id="extra-import-pane" role="tabpanel" aria-labelledby="extra-import-tab" tabindex="0">
             <h2 class="mb-4">Extra Import設定</h2>

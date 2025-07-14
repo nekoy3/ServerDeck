@@ -296,12 +296,6 @@ def index():
 def config_page():
     return render_template('config_modal_content.html')
 
-@app.route('/ssh_keys_content')
-@login_required
-def ssh_keys_content():
-    return render_template('ssh_keys.html')
-
-
 @app.route('/ssh/<server_id>')
 @login_required
 def ssh_terminal(server_id):

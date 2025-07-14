@@ -37,6 +37,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     configModal.show();
                     // モーダルコンテンツが読み込まれた後にJavaScriptを再初期化
                     initializeConfigModalScripts();
+                    // サーバー設定タブがデフォルトで開くため、初回ロード時にサーバーリストを明示的にロード
+                    loadServersForConfigModal();
                 })
                 .catch(error => console.error('Error loading config modal:', error));
         });
@@ -275,290 +277,54 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function initializeConfigModalScripts() {
-        // SSHキー管理タブのイベントリスナー
+        // 各タブが最初に表示されるときに、それぞれの初期化関数を一度だけ呼び出す
+        const serverTab = document.getElementById('servers-tab');
+        if(serverTab) {
+            serverTab.addEventListener('show.bs.tab', loadServersForConfigModal, { once: true });
+        }
+
         const sshKeysTab = document.getElementById('ssh-keys-tab');
         if (sshKeysTab) {
-            sshKeysTab.addEventListener('shown.bs.tab', function () {
-                const sshKeysPane = document.getElementById('ssh-keys-pane');
-                // コンテンツがまだロードされていない場合のみロードする
-                if (sshKeysPane && sshKeysPane.innerHTML.trim() === '') {
-                    fetch('/ssh_keys_content')
-                        .then(response => response.text())
-                        .then(html => {
-                            sshKeysPane.innerHTML = html;
-                            initializeSshKeyManagementScripts();
-                        })
-                        .catch(error => console.error('Error loading SSH keys content:', error));
-                }
-            }, { once: true }); // 一度だけ実行
+            sshKeysTab.addEventListener('show.bs.tab', initializeSshKeyManagementScripts, { once: true });
         }
 
-        // サーバー設定タブのコンテンツをロードする関数
-        function loadServerConfigContent() {
-            const configModalBody = document.getElementById('configModalBody');
-            fetch('/config')
-                .then(response => response.text())
-                .then(html => {
-                    configModalBody.innerHTML = html;
-                    // 設定モーダルのスクリプトを再初期化
-                    initializeConfigModalScripts();
-                    // 動的にロードされた後、サーバーリストをロード
-                    loadServersForConfigModal();
-                    loadExtraImportUrl();
-                })
-                .catch(error => console.error('Error reloading config modal content:', error));
-        }
-
-        // フォーム送信処理 (既存のconfigFormがあれば)
-        const configForm = document.getElementById('configForm');
-        if (configForm) {
-            configForm.addEventListener('submit', function(e) {
-                e.preventDefault();
-                const formData = new FormData(configForm);
-                fetch('/save_config', {
-                    method: 'POST',
-                    body: formData
-                })
-                .then(response => {
-                    if (!response.ok) {
-                        return response.json().then(err => { throw err; });
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    alert('設定が保存されました！');
-                    const configModal = bootstrap.Modal.getInstance(document.getElementById('configModal'));
-                    configModal.hide();
-                    location.reload();
-                })
-                .catch(error => {
-                    console.error('Error saving config:', error);
-                    alert('設定の保存に失敗しました: ' + (error.message || JSON.stringify(error)));
-                });
-            });
-        }
-
-        // SSHキー管理モーダルが開かれたときにSSHキーリストをロード
-        const sshKeyManagementModalElement = document.getElementById('sshKeyManagementModal');
-        if (sshKeyManagementModalElement) {
-            sshKeyManagementModalElement.addEventListener('shown.bs.modal', function () {
-                loadSshKeysForManagementModal();
-            });
-        }
-
-        // SSHキー追加/編集モーダルが開かれたときにフォームをリセット
-        const addSshKeyModalElement = document.getElementById('addSshKeyModal');
-        if (addSshKeyModalElement) {
-            addSshKeyModalElement.addEventListener('shown.bs.modal', function () {
-                document.getElementById('sshKeyForm').reset();
-                document.getElementById('sshKeyId').value = ''; // IDをクリアして新規追加モードにする
-            });
-        }
-
-        // Extra Import URL設定フォームの送信処理
-        const extraImportForm = document.getElementById('extra-import-form');
-        if (extraImportForm) {
-            extraImportForm.addEventListener('submit', function(e) {
-                e.preventDefault();
-                const extraImportUrlInput = document.getElementById('extra-import-url');
-                const newUrl = extraImportUrlInput.value;
-
-                fetch('/api/extra_import_url', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ url: newUrl })
-                })
-                .then(response => {
-                    if (!response.ok) {
-                        return response.json().then(err => { throw err; });
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    if (data.confirmation_needed) {
-                        const extraImportConfirmModal = new bootstrap.Modal(document.getElementById('extraImportConfirmModal'));
-                        extraImportConfirmModal.show();
-
-                        document.getElementById('extraImportConfirmDeleteBtn').onclick = () => {
-                            sendExtraImportConfirmation('delete_all');
-                            extraImportConfirmModal.hide();
-                        };
-                        document.getElementById('extraImportConfirmKeepBtn').onclick = () => {
-                            sendExtraImportConfirmation('keep_all');
-                            extraImportConfirmModal.hide();
-                        };
-                        document.getElementById('extraImportConfirmCancelBtn').onclick = () => {
-                            sendExtraImportConfirmation('cancel');
-                            extraImportConfirmModal.hide();
-                        };
-                    } else {
-                        alert(data.message);
-                        loadExtraImportUrl(); // URLを再ロードして表示を更新
-                        loadServersForConfigModal(); // サーバーリストを再ロード
-                    }
-                })
-                .catch(error => {
-                    console.error('Error saving Extra Import URL:', error);
-                    alert('Extra Import URLの保存に失敗しました: ' + (error.message || JSON.stringify(error)));
-                });
-            });
-        }
-
-        function sendExtraImportConfirmation(action) {
-            fetch('/api/extra_import_url/confirm', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ action: action })
-            })
-            .then(response => {
-                if (!response.ok) {
-                    return response.json().then(err => { throw err; });
-                }
-                return response.json();
-            })
-            .then(data => {
-                alert(data.message);
-                loadExtraImportUrl(); // URLを再ロードして表示を更新
-                loadServersForConfigModal(); // サーバーリストを再ロード
-            })
-            .catch(error => {
-                console.error('Error sending extra import confirmation:', error);
-                alert('Extra Importの確認に失敗しました: ' + (error.message || JSON.stringify(error)));
-            });
-        }
-
-        // Extra Import URLのロード
-        function loadExtraImportUrl() {
-            fetch('/api/extra_import_url')
-                .then(response => response.json())
-                .then(data => {
-                    const extraImportUrlInput = document.getElementById('extra-import-url');
-                    if (extraImportUrlInput) {
-                        extraImportUrlInput.value = data.url || '';
-                    }
-                })
-                .catch(error => console.error('Error loading extra import URL:', error));
-        }
-
-        // 設定モーダルが開かれたときにサーバーリストとExtra Import URLをロード
-        const configModalElement = document.getElementById('configModal');
-        if (configModalElement) {
-            configModalElement.addEventListener('shown.bs.modal', function () {
-                loadServersForConfigModal();
-                loadExtraImportUrl(); // Extra Import URLもロード
-            });
-        }
-
-        // サーバー選択機能の初期化（設定モーダル内）
-        const bulkDeleteServersBtn = document.getElementById('bulkDeleteServersBtn');
-
-        // 一括削除ボタンのクリックイベント（設定モーダル内）
-        if (bulkDeleteServersBtn) {
-            bulkDeleteServersBtn.removeEventListener('click', handleBulkDeleteServersClick); // 既存のリスナーを削除
-            bulkDeleteServersBtn.addEventListener('click', handleBulkDeleteServersClick); // 新しいリスナーを追加
-        }
-
-
-        function handleBulkDeleteServersClick() {
-            const selectedServerIds = [];
-            document.querySelectorAll('.config-server-checkbox:checked').forEach(checkbox => {
-                selectedServerIds.push(checkbox.dataset.serverId);
-            });
-
-            if (selectedServerIds.length > 0) {
-                if (confirm(`${selectedServerIds.length}個のサーバーを本当に削除しますか？`)) {
-                    fetch('/bulk_delete_servers', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({ server_ids: selectedServerIds })
-                    })
-                    .then(response => {
-                        if (!response.ok) {
-                            return response.json().then(err => { throw err; });
-                        }
-                        return response.json();
-                    })
-                    .then(data => {
-                        alert('選択されたサーバーが削除されました！');
-                        // サーバーリストを再ロードしてUIを更新
-                        loadServersForConfigModal();
-                    })
-                    .catch(error => {
-                        console.error('Error during bulk delete:', error);
-                        alert('サーバーの一括削除に失敗しました: ' + (error.message || JSON.stringify(error)));
-                    });
-                }
-            } else {
-                alert('削除するサーバーを選択してください。');
-            }
-        }
-
-    }
-
-    // SSHキー管理モーダル用の関数群
-    function loadSshKeysForManagementModal() {
-        fetch('/api/ssh_keys')
-            .then(response => response.json())
-            .then(sshKeys => {
-                const sshKeyListDiv = document.getElementById('ssh-key-list');
-                if (!sshKeyListDiv) return;
-                sshKeyListDiv.innerHTML = ''; // Clear existing content
-
-                if (sshKeys.length === 0) {
-                    sshKeyListDiv.innerHTML = '<p>SSHキーはまだ登録されていません。</p>';
-                    return;
-                }
-
-                sshKeys.forEach(key => {
-                    const keyItemHtml = `
-                        <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-                            <div>
-                                <input class="form-check-input me-1 ssh-key-checkbox" type="checkbox" value="" data-key-id="${key.id}">
-                                <strong>${key.name}</strong><br>
-                                <small>${key.path}</small>
-                            </div>
-                            <div>
-                                <button class="btn btn-sm btn-info edit-ssh-key-btn" data-id="${key.id}">編集</button>
-                                <button class="btn btn-sm btn-danger delete-ssh-key-btn" data-id="${key.id}">削除</button>
-                            </div>
-                        </div>
-                    `;
-                    sshKeyListDiv.insertAdjacentHTML('beforeend', keyItemHtml);
-                });
-
-                updateBulkDeleteSshKeysButtonVisibility();
-            })
-            .catch(error => console.error('Error loading SSH keys:', error));
-    }
-
-    function updateBulkDeleteSshKeysButtonVisibility() {
-        const bulkDeleteSshKeysBtn = document.getElementById('bulkDeleteSshKeysBtn');
-        if (bulkDeleteSshKeysBtn) {
-            const checkedCount = document.querySelectorAll('.ssh-key-checkbox:checked').length;
-            bulkDeleteSshKeysBtn.disabled = checkedCount === 0;
-        }
+        // 必要に応じて他のタブの初期化もここに追加
     }
 
     // SSHキー管理画面のスクリプトを初期化する関数
     function initializeSshKeyManagementScripts() {
+        console.log('initializeSshKeyManagementScripts called');
+
+        const sshKeyListView = document.getElementById('ssh-key-list-view');
+        const sshKeyFormView = document.getElementById('ssh-key-form-view');
+        const sshKeyFormTitle = document.getElementById('sshKeyFormTitle');
+        const sshKeyForm = document.getElementById('sshKeyForm');
+        const sshKeyIdInput = document.getElementById('sshKeyId');
+        const sshKeyNameInput = document.getElementById('sshKeyName');
+        const sshKeyPathInput = document.getElementById('sshKeyPath');
+        const sshKeyUploadInput = document.getElementById('sshKeyUpload');
+
         // 「新しいSSHキーを追加」ボタン
         const addNewSshKeyBtn = document.getElementById('addNewSshKeyBtn');
         if (addNewSshKeyBtn) {
             addNewSshKeyBtn.addEventListener('click', function() {
                 // フォームをリセット
-                const sshKeyForm = document.getElementById('sshKeyForm');
                 if(sshKeyForm) sshKeyForm.reset();
-                const sshKeyId = document.getElementById('sshKeyId');
-                if(sshKeyId) sshKeyId.value = '';
+                if(sshKeyIdInput) sshKeyIdInput.value = '';
                 
-                const addSshKeyModal = new bootstrap.Modal(document.getElementById('addSshKeyModal'));
-                addSshKeyModal.show();
+                if(sshKeyFormTitle) sshKeyFormTitle.textContent = '新しいSSHキーを追加';
+                if(sshKeyListView) sshKeyListView.classList.add('d-none');
+                if(sshKeyFormView) sshKeyFormView.classList.remove('d-none');
+            });
+        }
+
+        // キャンセルボタン
+        const cancelSshKeyFormBtn = document.getElementById('cancelSshKeyFormBtn');
+        if (cancelSshKeyFormBtn) {
+            cancelSshKeyFormBtn.addEventListener('click', function() {
+                if(sshKeyFormView) sshKeyFormView.classList.add('d-none');
+                if(sshKeyListView) sshKeyListView.classList.remove('d-none');
+                loadSshKeysForManagementModal(); // リストを再ロード
             });
         }
 
@@ -574,11 +340,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     fetch(`/api/ssh_keys/${keyId}`)
                         .then(response => response.json())
                         .then(key => {
-                            document.getElementById('sshKeyId').value = key.id;
-                            document.getElementById('sshKeyName').value = key.name;
-                            document.getElementById('sshKeyPath').value = key.path;
-                            const addSshKeyModal = new bootstrap.Modal(document.getElementById('addSshKeyModal'));
-                            addSshKeyModal.show();
+                            if(sshKeyIdInput) sshKeyIdInput.value = key.id;
+                            if(sshKeyNameInput) sshKeyNameInput.value = key.name;
+                            if(sshKeyPathInput) sshKeyPathInput.value = key.path;
+                            
+                            if(sshKeyFormTitle) sshKeyFormTitle.textContent = 'SSHキーを編集';
+                            if(sshKeyListView) sshKeyListView.classList.add('d-none');
+                            if(sshKeyFormView) sshKeyFormView.classList.remove('d-none');
                         })
                         .catch(error => console.error('Error fetching SSH key for edit:', error));
                 }
@@ -640,7 +408,6 @@ document.addEventListener('DOMContentLoaded', function() {
         const uploadSshKeyFileBtn = document.getElementById('uploadSshKeyFileBtn');
         if (uploadSshKeyFileBtn) {
             uploadSshKeyFileBtn.addEventListener('click', function() {
-                const sshKeyUploadInput = document.getElementById('sshKeyUpload');
                 const file = sshKeyUploadInput.files[0];
                 if (!file) {
                     alert('アップロードするファイルを選択してください。');
@@ -662,8 +429,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 })
                 .then(data => {
                     alert('SSHキーがアップロードされました！');
-                    document.getElementById('sshKeyPath').value = data.path; // アップロードされたファイルのパスをセット
-                    sshKeyUploadInput.value = ''; // ファイル選択をクリア
+                    if(sshKeyPathInput) sshKeyPathInput.value = data.path; // アップロードされたファイルのパスをセット
+                    if(sshKeyUploadInput) sshKeyUploadInput.value = ''; // ファイル選択をクリア
                 })
                 .catch(error => {
                     console.error('Error uploading SSH key:', error);
@@ -673,13 +440,12 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         // SSHキー追加/編集フォームの送信処理
-        const sshKeyForm = document.getElementById('sshKeyForm');
         if (sshKeyForm) {
             sshKeyForm.addEventListener('submit', function(e) {
                 e.preventDefault();
-                const keyId = document.getElementById('sshKeyId').value;
-                const keyName = document.getElementById('sshKeyName').value;
-                const keyPath = document.getElementById('sshKeyPath').value;
+                const keyId = sshKeyIdInput.value;
+                const keyName = sshKeyNameInput.value;
+                const keyPath = sshKeyPathInput.value;
 
                 const method = keyId ? 'PUT' : 'POST';
                 const url = keyId ? `/api/ssh_keys/${keyId}` : '/api/ssh_keys';
@@ -704,9 +470,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     return response.json();
                 })
                 .then(data => {
-                    alert('SSHキーが保存されました！');
-                    const addSshKeyModal = bootstrap.Modal.getInstance(document.getElementById('addSshKeyModal'));
-                    addSshKeyModal.hide();
+                    alert('SSHキーが保存されました！'); // 成功メッセージを表示
+                    if(sshKeyFormView) sshKeyFormView.classList.add('d-none'); // フォームを非表示
+                    if(sshKeyListView) sshKeyListView.classList.remove('d-none'); // リストを表示
                     loadSshKeysForManagementModal(); // SSHキーリストを再ロード
                 })
                 .catch(error => {
@@ -715,6 +481,138 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
             });
         }
+    }
+
+    // SSHキー管理モーダル用の関数群
+    function loadSshKeysForManagementModal() {
+        console.log('loadSshKeysForManagementModal called'); // ここにログを追加
+        fetch('/api/ssh_keys')
+            .then(response => response.json())
+            .then(sshKeys => {
+                console.log('SSH keys fetched successfully:', sshKeys); // ここにログを追加
+                const sshKeyListDiv = document.getElementById('ssh-key-list');
+                if (!sshKeyListDiv) return;
+                sshKeyListDiv.innerHTML = ''; // Clear existing content
+
+                if (sshKeys.length === 0) {
+                    sshKeyListDiv.innerHTML = '<p>SSHキーはまだ登録されていません。</p>';
+                    return;
+                }
+
+                let allKeyItemsHtml = ''; // すべてのHTMLを格納する変数
+                sshKeys.forEach(key => {
+                    const keyItemHtml = `
+                        <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                            <div>
+                                <input class="form-check-input me-1 ssh-key-checkbox" type="checkbox" value="" data-key-id="${key.id}">
+                                <strong>${key.name}</strong><br>
+                                <small>${key.path}</small>
+                            </div>
+                            <div>
+                                <button class="btn btn-sm btn-info edit-ssh-key-btn" data-id="${key.id}">編集</button>
+                                <button class="btn btn-sm btn-danger delete-ssh-key-btn" data-id="${key.id}">削除</button>
+                            </div>
+                        </div>
+                    `;
+                    allKeyItemsHtml += keyItemHtml; // HTML文字列を追加
+                });
+
+                sshKeyListDiv.innerHTML = allKeyItemsHtml; // 一度にDOMに挿入
+
+                updateBulkDeleteSshKeysButtonVisibility();
+            })
+            .catch(error => {
+                console.error('Error loading SSH keys:', error);
+                alert('SSHキーのロードに失敗しました: ' + (error.message || JSON.stringify(error)));
+            });
+    }
+
+    function updateBulkDeleteSshKeysButtonVisibility() {
+        const bulkDeleteSshKeysBtn = document.getElementById('bulkDeleteSshKeysBtn');
+        if (bulkDeleteSshKeysBtn) {
+            const checkedCount = document.querySelectorAll('.ssh-key-checkbox:checked').length;
+            bulkDeleteSshKeysBtn.disabled = checkedCount === 0;
+        }
+    }
+
+    // SSHキーのアップロード処理
+    const uploadSshKeyFileBtn = document.getElementById('uploadSshKeyFileBtn');
+    if (uploadSshKeyFileBtn) {
+        uploadSshKeyFileBtn.addEventListener('click', function() {
+            const sshKeyUploadInput = document.getElementById('sshKeyUpload');
+            const file = sshKeyUploadInput.files[0];
+            if (!file) {
+                alert('アップロードするファイルを選択してください。');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            fetch('/api/ssh_keys/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => { throw new Error(err.error || 'Unknown error'); });
+                }
+                return response.json();
+            })
+            .then(data => {
+                alert('SSHキーがアップロードされました！');
+                document.getElementById('sshKeyPath').value = data.path; // アップロードされたファイルのパスをセット
+                sshKeyUploadInput.value = ''; // ファイル選択をクリア
+            })
+            .catch(error => {
+                console.error('Error uploading SSH key:', error);
+                alert('SSHキーのアップロードに失敗しました: ' + error.message);
+            });
+        });
+    }
+
+    // SSHキー追加/編集フォームの送信処理
+    const sshKeyForm = document.getElementById('sshKeyForm');
+    if (sshKeyForm) {
+        sshKeyForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const keyId = document.getElementById('sshKeyId').value;
+            const keyName = document.getElementById('sshKeyName').value;
+            const keyPath = document.getElementById('sshKeyPath').value;
+
+            const method = keyId ? 'PUT' : 'POST';
+            const url = keyId ? `/api/ssh_keys/${keyId}` : '/api/ssh_keys';
+
+            const payload = {
+                id: keyId || `sshkey-${Date.now()}-${Math.floor(Math.random() * 10000)}`, // 新規作成時はIDを生成
+                name: keyName,
+                path: keyPath
+            };
+
+            fetch(url, {
+                method: method,
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => { throw err; });
+                }
+                return response.json();
+            })
+            .then(data => {
+                alert('SSHキーが保存されました！'); // 成功メッセージを表示
+                sshKeyFormView.classList.add('d-none'); // フォームを非表示
+                sshKeyListView.classList.remove('d-none'); // リストを表示
+                loadSshKeysForManagementModal(); // SSHキーリストを再ロード
+            })
+            .catch(error => {
+                console.error('Error saving SSH key:', error);
+                alert('SSHキーの保存に失敗しました: ' + (error.message || JSON.stringify(error)));
+            });
+        });
     }
 
     // 設定モーダル内のサーバーリストをロードする関数
@@ -873,7 +771,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (editModal) {
                     editModal.hide();
                 }
-                location.reload(); // ページをリロードして変更を反映
+                loadServersForConfigModal(); // サーバーリストを再ロードして変更を反映
             })
             .catch(error => {
                 console.error('Error updating server:', error);
