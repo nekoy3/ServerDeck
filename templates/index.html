@@ -74,6 +74,7 @@
                                 {% endfor %}
                             </div>
                             {% endif %}
+                            
                             <div class="d-flex align-items-center mt-2">
                                 <div class="ping-status-box" id="ping-status-{{ server.id }}">
                                     <span class="status-text">N/A</span>
@@ -88,8 +89,10 @@
                         {% elif server.is_deleted %}
                         <button class="btn btn-sm btn-danger confirm-delete-btn" data-id="{{ server.id }}">削除</button>
                         <button class="btn btn-sm btn-secondary cancel-delete-btn" data-id="{{ server.id }}">維持</button>
-                        {% elif server.type == 'ssh' %}
-                        <a href="/ssh/{{ server.id }}" class="btn btn-primary btn-sm">SSH接続</a>
+                        {% else %}
+                            {% if server.type in ['node', 'virtual_machine', 'network_device', 'kvm'] and server.username %}
+                            <a href="{{ url_for('ssh_terminal', server_id=server.id) }}" class="btn btn-sm btn-success">SSH接続</a>
+                            {% endif %}
                         {% endif %}
                     </div>
                 </div>
