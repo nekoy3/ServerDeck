@@ -5,6 +5,7 @@ WORKDIR /app
 # Install build-essential for compiling Python packages like PyNaCl
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    iputils-ping \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .

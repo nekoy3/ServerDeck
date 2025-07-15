@@ -45,39 +45,73 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Pingステータスの更新関数
-    function updatePingStatus() {
-        document.querySelectorAll('.ping-status-box').forEach(box => {
-            const serverId = box.id.replace('ping-status-', '');
-            fetch(`/api/ping_status/${serverId}`)
-                .then(response => response.json())
-                .then(data => {
-                    box.classList.remove('online', 'offline', 'checking', 'na');
-                    if (data.status === 'online') {
-                        box.classList.add('online');
-                        box.textContent = 'Online';
-                    } else if (data.status === 'offline') {
-                        box.classList.add('offline');
-                        box.textContent = 'Offline';
-                    } else if (data.status === 'checking') {
-                        box.classList.add('checking');
-                        box.textContent = 'Checking...';
-                    } else {
-                        box.classList.add('na');
-                        box.textContent = 'N/A';
-                    }
-                })
-                .catch(error => {
-                    console.error('Error fetching ping status:', error);
-                    box.classList.remove('online', 'offline', 'checking');
-                    box.classList.add('na');
-                    box.textContent = 'N/A';
-                });
-        });
+    function updatePingStatus(serverId = null, data = null) {
+        const updateSingleBox = (box, statusData) => {
+            const statusTextSpan = box.querySelector('.status-text');
+            const pingDetailsSpan = box.querySelector('.ping-details');
+
+            box.classList.remove('online', 'offline', 'checking', 'na', 'disabled');
+
+            if (statusData.status === 'online') {
+                box.classList.add('online');
+                if (statusTextSpan) statusTextSpan.textContent = 'Online';
+                if (pingDetailsSpan) {
+                    pingDetailsSpan.textContent = ` (${statusData.response_time !== null ? statusData.response_time.toFixed(1) + ' ms' : 'N/A'}, ${statusData.packet_loss !== null ? statusData.packet_loss + '%' : 'N/A'} loss)`;
+                }
+            } else if (statusData.status === 'offline') {
+                box.classList.add('offline');
+                if (statusTextSpan) statusTextSpan.textContent = 'Offline';
+                if (pingDetailsSpan) pingDetailsSpan.textContent = '';
+            } else if (statusData.status === 'checking') {
+                box.classList.add('checking');
+                if (statusTextSpan) statusTextSpan.textContent = 'Checking...';
+                if (pingDetailsSpan) pingDetailsSpan.textContent = '';
+            } else if (statusData.status === 'disabled') {
+                box.classList.add('disabled');
+                if (statusTextSpan) statusTextSpan.textContent = 'Disabled';
+                if (pingDetailsSpan) pingDetailsSpan.textContent = '';
+            } else {
+                box.classList.add('na');
+                if (statusTextSpan) statusTextSpan.textContent = 'N/A';
+                if (pingDetailsSpan) pingDetailsSpan.textContent = '';
+            }
+        };
+
+        if (serverId && data) {
+            // Update a single box based on provided data (e.g., from SocketIO)
+            const box = document.getElementById(`ping-status-${serverId}`);
+            if (box) {
+                updateSingleBox(box, data);
+            }
+        } else {
+            // Fetch status for all boxes (initial load or periodic refresh)
+            document.querySelectorAll('.ping-status-box').forEach(box => {
+                const currentServerId = box.id.replace('ping-status-', '');
+                fetch(`/api/ping_status/${currentServerId}`)
+                    .then(response => response.json())
+                    .then(statusData => {
+                        updateSingleBox(box, statusData);
+                    })
+                    .catch(error => {
+                        console.error('Error fetching ping status for', currentServerId, ':', error);
+                        updateSingleBox(box, { status: 'error', response_time: null, packet_loss: null });
+                    });
+            });
+        }
     }
 
-    // ページ読み込み時と5秒ごとにPingステータスを更新
+    // ページ読み込み時と5秒ごとにPingステータスを更新（初回ロードはSocketIOでカバーされるため、定期更新のみ）
+    // setInterval(updatePingStatus, 5000); // SocketIOでリアルタイム更新するため、この定期更新はコメントアウトまたは削除
+
+    // Socket.IOクライアントの初期化
+    const socket = io();
+
+    socket.on('ping_status_update', function(data) {
+        updatePingStatus(data.server_id, data);
+    });
+
+    // 初回ロード時にPingステータスを更新
     updatePingStatus();
-    setInterval(updatePingStatus, 5000);
 
     // --- SSHキーのドロップダウンをロードする ---
     function loadSshKeysForEditModal(selectedKeyId) {
@@ -138,6 +172,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 document.getElementById('editServerDescription').value = server.description || '';
                 document.getElementById('editServerTags').value = server.tags ? server.tags.join(', ') : '';
                 
+                // Ping監視設定
+                document.getElementById('editPingEnabled').checked = server.ping_enabled || false;
+
                 // 認証方法を設定
                 const authMethodSelect = document.getElementById('editAuthMethod');
                 const usernameInput = document.getElementById('editServerUsername');
@@ -293,7 +330,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // SSHキー管理画面のスクリプトを初期化する関数
     function initializeSshKeyManagementScripts() {
-        console.log('initializeSshKeyManagementScripts called');
 
         const sshKeyListView = document.getElementById('ssh-key-list-view');
         const sshKeyFormView = document.getElementById('ssh-key-form-view');
@@ -485,11 +521,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // SSHキー管理モーダル用の関数群
     function loadSshKeysForManagementModal() {
-        console.log('loadSshKeysForManagementModal called'); // ここにログを追加
         fetch('/api/ssh_keys')
             .then(response => response.json())
             .then(sshKeys => {
-                console.log('SSH keys fetched successfully:', sshKeys); // ここにログを追加
                 const sshKeyListDiv = document.getElementById('ssh-key-list');
                 if (!sshKeyListDiv) return;
                 sshKeyListDiv.innerHTML = ''; // Clear existing content
@@ -782,6 +816,9 @@ document.addEventListener('DOMContentLoaded', function() {
             
             const formData = new FormData(editServerForm);
             const payload = Object.fromEntries(formData.entries());
+
+            // ping_enabled の状態を明示的に設定
+            payload.ping_enabled = document.getElementById('editPingEnabled').checked;
 
             if (authMethod === 'ssh_key') {
                 payload.username = payload.username_ssh;

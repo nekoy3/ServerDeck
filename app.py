@@ -1,3 +1,4 @@
+import re # Added for ping parsing
 import sys
 import logging
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for, flash, send_from_directory, make_response
@@ -34,30 +35,54 @@ socketio = SocketIO(app)
 # --- Ping Utility ---
 def ping_host(host, count=1, timeout=1):
     """
-    Pings a host and returns True if successful, False otherwise.
-    Uses 'ping -c 1 -W 1' for Linux/macOS and 'ping -n 1 -w 1000' for Windows.
+    Pings a host and returns a dictionary with status, response_time (avg), and packet_loss.
     """
     param = '-n' if sys.platform.startswith('win') else '-c'
     command = ['ping', param, str(count), '-W' if sys.platform != 'win32' else '-w', str(timeout * 1000 if sys.platform.startswith('win') else timeout), host]
+    
+    result_data = {'status': 'unknown', 'response_time': None, 'packet_loss': None}
+
     try:
-        # Use subprocess.run for Python 3.5+
-        result = subprocess.run(command, capture_output=True, text=True, timeout=timeout + 1)
-        # Check return code and stdout/stderr for success
-        if result.returncode == 0:
-            return 'online'
+        process = subprocess.run(command, capture_output=True, text=True, timeout=timeout + 1)
+        output = process.stdout + process.stderr
+
+        if process.returncode == 0:
+            result_data['status'] = 'online'
         else:
-            # Ping command failed (e.g., host unreachable, 100% packet loss)
-            app.logger.debug(f"Ping failed for {host}: {result.stderr.strip()}")
-            return 'offline'
+            result_data['status'] = 'offline'
+
+        # Packet loss parsing
+        packet_loss_match = re.search(r'(\d+)% packet loss', output)
+        if packet_loss_match:
+            result_data['packet_loss'] = float(packet_loss_match.group(1))
+
+        # Response time parsing (average)
+        # Linux/macOS: rtt min/avg/max/mdev = 10.200/10.200/10.200/0.000 ms
+        # Windows: Minimum = 10ms, Maximum = 10ms, Average = 10ms
+        if sys.platform.startswith('win'):
+            avg_time_match = re.search(r'Average = (\d+)ms', output)
+            if avg_time_match:
+                result_data['response_time'] = float(avg_time_match.group(1))
+        else:
+            avg_time_match = re.search(r'rtt min/avg/max/mdev = [^/]+/([\d.]+)', output)
+            if avg_time_match:
+                result_data['response_time'] = float(avg_time_match.group(1))
+
+        if result_data['status'] == 'online' and result_data['response_time'] is None:
+            # Sometimes ping is online but avg time not found (e.g., very short output)
+            result_data['response_time'] = 0.0 # Default to 0 if online but no time found
+
     except subprocess.TimeoutExpired:
         app.logger.debug(f"Ping timed out for {host}")
-        return 'offline'
+        result_data['status'] = 'offline'
     except FileNotFoundError:
         app.logger.error("Ping command not found. Please ensure ping is installed and in your PATH.")
-        return 'unknown'
+        result_data['status'] = 'unknown'
     except Exception as e:
         app.logger.error(f"An error occurred during ping for {host}: {e}")
-        return 'unknown'
+        result_data['status'] = 'unknown'
+    
+    return result_data
 
 # --- Logging Configuration ---
 app.logger.setLevel(logging.DEBUG)
@@ -83,6 +108,9 @@ BACKUP_DIR = os.path.join(CONFIG_DIR, 'backup')
 os.makedirs(BACKUP_DIR, exist_ok=True);
 
 active_ssh_sessions = {}
+
+# Global dictionary to store current ping statuses
+server_ping_status = {}
 
 # --- Config Loading/Saving ---
 def backup_config_file(file_path):
@@ -122,7 +150,209 @@ def backup_config_file(file_path):
 def load_servers_config():
     if os.path.exists(SERVERS_CONFIG_PATH):
         with open(SERVERS_CONFIG_PATH, 'r') as f:
-            return yaml.safe_load(f) or {"servers": []}
+            config = yaml.safe_load(f) or {"servers": []}
+            for server in config.get('servers', []):
+                if 'ping_enabled' not in server:
+                    server['ping_enabled'] = True # Default to True
+            return config
+    return {"servers": []}
+
+def save_servers_config(config_data):
+    os.makedirs(CONFIG_DIR, exist_ok=True);
+    with open(SERVERS_CONFIG_PATH, 'w') as f:
+        yaml.dump(config_data, f, indent=2, sort_keys=False)
+    backup_config_file(SERVERS_CONFIG_PATH)
+
+def load_ssh_keys_config():
+    if os.path.exists(SSH_KEYS_CONFIG_PATH):
+        with open(SSH_KEYS_CONFIG_PATH, 'r') as f:
+            return yaml.safe_load(f) or {"ssh_keys": []}
+    return {"ssh_keys": []}
+
+def save_ssh_keys_config(config_data):
+    os.makedirs(CONFIG_DIR, exist_ok=True);
+    with open(SSH_KEYS_CONFIG_PATH, 'w') as f:
+        yaml.dump(config_data, f, indent=2, sort_keys=False)
+    backup_config_file(SSH_KEYS_CONFIG_PATH)
+
+def load_users_config():
+    if os.path.exists(USERS_CONFIG_PATH):
+        with open(USERS_CONFIG_PATH, 'r') as f:
+            config = yaml.safe_load(f) or {"users": []}
+            return config
+    return {"users": []}
+
+def load_extra_import_config():
+    if os.path.exists(EXTRA_IMPORT_CONFIG_PATH):
+        with open(EXTRA_IMPORT_CONFIG_PATH, 'r') as f:
+            config = yaml.safe_load(f) or {}
+            if "url" not in config:
+                config["url"] = ""
+            if "previous_url" not in config:
+                config["previous_url"] = ""
+            return config
+    return {"url": "", "previous_url": ""}
+
+def save_extra_import_config(config_data):
+    os.makedirs(CONFIG_DIR, exist_ok=True)
+    with open(EXTRA_IMPORT_CONFIG_PATH, 'w') as f:
+        yaml.dump(config_data, f, indent=2, sort_keys=False)
+
+
+# Type display names mapping
+TYPE_DISPLAY_NAMES = {
+    'node': 'ノード',
+    'virtual_machine': '仮想マシン',
+    'network_device': 'ネットワークデバイス',
+    'kvm': 'KVM',
+}
+
+def run_extra_import():
+    with app.app_context():
+        app.logger.info("Running extra import...")
+        extra_import_config = load_extra_import_config()
+        url = extra_import_config.get('url')
+
+        if not url:
+            app.logger.info("Extra import URL not configured. Skipping.")
+            # If URL is cleared, remove is_extra and is_new/is_deleted flags from all extra servers
+            config = load_servers_config()
+            servers = config.get('servers', [])
+            updated_servers = []
+            for server in servers:
+                if server.get('is_extra'):
+                    server.pop('is_extra', None)
+                    server.pop('is_new', None)
+                    server.pop('is_deleted', None)
+                updated_servers.append(server)
+            config['servers'] = updated_servers
+            save_servers_config(config)
+            return
+
+        try:
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()
+            
+            # The text file contains 'hostname ip' pairs, so we split and take the first part.
+            # Then, remove trailing dot if present.
+            imported_hosts = []
+            for line in response.text.splitlines():
+                stripped_line = line.strip()
+                if stripped_line:
+                    host_part = stripped_line.split()[0] # Take the first part (hostname)
+                    if host_part.endswith('.'):
+                        host_part = host_part[:-1] # Remove trailing dot
+                    imported_hosts.append(host_part)
+
+            config = load_servers_config()
+            servers = config.get('servers', [])
+            existing_hosts = [s.get('host') for s in servers]
+
+            # Add new servers
+            for host in imported_hosts:
+                if host not in existing_hosts:
+                    new_server = {
+                        'id': f"server-{int(time.time() * 1000)}-{random.randint(1000, 9999)}",
+                        'name': host.split('.')[0],
+                        'type': 'node',
+                        'port': 22,
+                        'host': host,
+                        'is_extra': True,
+                        'is_new': True,  # Flag for green border
+                        'ping_enabled': True
+                    }
+                    servers.append(new_server)
+                    app.logger.info(f"Added new server from extra import: {host}")
+
+            # Mark existing extra servers that are no longer in the import list as deleted
+            for server in servers:
+                if server.get('is_extra') and server.get('host') not in imported_hosts:
+                    server['is_deleted'] = True # Flag for red border
+                    server.pop('is_new', None) # Ensure it's not marked as new if it's deleted
+                    app.logger.info(f"Marked server for deletion from extra import: {server.get('host')}")
+                elif server.get('is_extra') and server.get('host') in imported_hosts:
+                    # If an extra server is still in the list, ensure it's not marked for deletion or new
+                    server.pop('is_deleted', None)
+                    server.pop('is_new', None)
+
+            save_servers_config(config)
+            app.logger.info("Extra import finished.")
+
+        except requests.RequestException as e:
+            app.logger.error(f"Error during extra import: {e}")
+
+def schedule_extra_import():
+    run_extra_import()
+    threading.Timer(300, schedule_extra_import).start()
+
+# Ping monitoring background task
+def run_ping_monitoring():
+    with app.app_context():
+        app.logger.info("Starting ping monitoring thread...")
+        while True:
+            config = load_servers_config()
+            servers = config.get('servers', [])
+            for server in servers:
+                server_id = server.get('id')
+                host = server.get('host')
+                ping_enabled = server.get('ping_enabled', False)
+
+                if server_id and host and ping_enabled:
+                    app.logger.debug(f"Pinging {host} (ID: {server_id}) for monitoring...")
+                    ping_result = ping_host(host)
+                    server_ping_status[server_id] = ping_result
+                    # Emit SocketIO event for real-time update
+                    socketio.start_background_task(socketio.emit, 'ping_status_update', {'server_id': server_id, 'status': ping_result['status'], 'response_time': ping_result['response_time'], 'packet_loss': ping_result['packet_loss']})
+                elif server_id and server_id in server_ping_status:
+                    # If ping is disabled, remove from active monitoring and clear status
+                    del server_ping_status[server_id]
+                    socketio.start_background_task(socketio.emit, 'ping_status_update', {'server_id': server_id, 'status': 'disabled', 'response_time': None, 'packet_loss': None})
+
+            time.sleep(10) # Ping every 10 seconds
+
+# --- Authentication ---
+def backup_config_file(file_path):
+    try:
+        if not os.path.exists(file_path):
+            app.logger.warning(f"Backup failed: Source file does not exist: {file_path}")
+            return
+
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        file_name = os.path.basename(file_path)
+        base_name, ext = os.path.splitext(file_name)
+        backup_file_name = f"{base_name.split('_')[0]}_{timestamp}{ext}"
+        backup_path = os.path.join(BACKUP_DIR, backup_file_name)
+
+        shutil.copy2(file_path, backup_path)
+        app.logger.info(f"Backed up {file_name} to {backup_path}")
+
+        # Clean up old backups, keeping only the latest 5 for each type
+        backup_prefix = base_name.split('_')[0] # e.g., 'servers' or 'ssh_keys'
+        all_backups = []
+        for f in os.listdir(BACKUP_DIR):
+            if f.startswith(backup_prefix) and f.endswith(ext):
+                all_backups.append(os.path.join(BACKUP_DIR, f))
+
+        # Sort by modification time (oldest first)
+        all_backups.sort(key=os.path.getmtime)
+
+        # Remove oldest backups if count exceeds 5
+        while len(all_backups) > 5:
+            oldest_backup = all_backups.pop(0)
+            os.remove(oldest_backup)
+            app.logger.info(f"Removed old backup: {oldest_backup}")
+
+    except Exception as e:
+        app.logger.error(f"Error backing up {file_path}: {e}")
+
+def load_servers_config():
+    if os.path.exists(SERVERS_CONFIG_PATH):
+        with open(SERVERS_CONFIG_PATH, 'r') as f:
+            config = yaml.safe_load(f) or {"servers": []}
+            for server in config.get('servers', []):
+                if 'ping_enabled' not in server:
+                    server['ping_enabled'] = True # Default to True
+            return config
     return {"servers": []}
 
 def save_servers_config(config_data):
@@ -231,7 +461,8 @@ def run_extra_import():
                         'port': 22,
                         'host': host,
                         'is_extra': True,
-                        'is_new': True  # Flag for green border
+                        'is_new': True,  # Flag for green border
+                        'ping_enabled': True
                     }
                     servers.append(new_server)
                     app.logger.info(f"Added new server from extra import: {host}")
@@ -366,9 +597,10 @@ def update_server(server_id):
         if server['id'] == server_id:
             # Merge existing data with updated data
             servers[i] = {**server, **updated_data}
-            # When a server is manually edited, remove the 'new' and 'deleted' flags
+            # When a server is manually edited, remove the 'new', 'deleted', and 'extra' flags
             servers[i].pop('is_new', None)
             servers[i].pop('is_deleted', None)
+            servers[i].pop('is_extra', None) # Remove is_extra flag on manual edit
             found = True
             break
     if not found:
@@ -510,17 +742,9 @@ def confirm_extra_import_action():
 @app.route('/api/ping_status/<server_id>', methods=['GET'])
 @login_required
 def get_ping_status(server_id):
-    config = load_servers_config()
-    server = next((s for s in config.get('servers', []) if s['id'] == server_id), None)
-    if not server:
-        return jsonify({"error": "Server not found"}), 404
-
-    host = server.get('host')
-    if not host:
-        return jsonify({"status": "n/a", "message": "Host information not available for ping"}), 200
-
-    status = ping_host(host)
-    return jsonify({"status": status}), 200
+    # Retrieve ping status from the global monitoring dictionary
+    ping_result = server_ping_status.get(server_id, {'status': 'unknown', 'response_time': None, 'packet_loss': None})
+    return jsonify(ping_result)
 
 @app.route('/api/ssh_keys', methods=['GET'])
 @login_required
@@ -897,4 +1121,5 @@ def handle_disconnect():
 
 if __name__ == '__main__':
     threading.Thread(target=schedule_extra_import, daemon=True).start()
+    threading.Thread(target=run_ping_monitoring, daemon=True).start() # Start ping monitoring thread
     socketio.run(app, host='0.0.0.0', debug=True, allow_unsafe_werkzeug=True, port=5001);

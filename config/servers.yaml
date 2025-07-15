@@ -1,181 +1,243 @@
 servers:
-- id: server-1752480452059-6569
+- id: server-1752502721341-6813
+  name: aruba01
+  type: node
+  port: 22
+  host: aruba01.mynk.home
+  is_extra: true
+  ping_enabled: true
+- id: server-1752502721341-2310
+  name: blog
+  type: node
+  port: '22'
+  host: blog.mynk.home
+  ping_enabled: true
+  url: ''
+  tags: ''
+  description: ''
+  auth_method: password
+  username: ''
+  password: ''
+- id: server-1752502721341-3253
+  name: box
+  type: node
+  port: 22
+  host: box.mynk.home
+  is_extra: true
+  ping_enabled: true
+- id: server-1752502721341-9404
   name: cache
   type: node
   port: 22
   host: cache.mynk.home
   is_extra: true
-- id: server-1752480452059-3956
+  ping_enabled: true
+- id: server-1752502721341-5762
   name: db
   type: node
   port: 22
   host: db.mynk.home
   is_extra: true
-- id: server-1752480452059-2417
+  ping_enabled: true
+- id: server-1752502721341-4389
   name: deploy
-  type: node
-  port: 22
+  type: virtual_machine
+  port: '22'
   host: deploy.mynk.home
-  is_extra: true
-- id: server-1752480452059-1616
+  ping_enabled: true
+  url: ''
+  tags: ''
+  description: ''
+  auth_method: ssh_key
+  username: nekoy
+  password: ''
+  ssh_key_id: sshkey-1752048252175
+- id: server-1752502721341-7390
   name: dhcp
   type: node
   port: 22
   host: dhcp.mynk.home
   is_extra: true
-- id: server-1752480452059-5291
+  ping_enabled: true
+- id: server-1752502721341-5048
   name: dns
   type: node
   port: 22
   host: dns.mynk.home
   is_extra: true
-- id: server-1752480452059-2251
+  ping_enabled: true
+- id: server-1752502721341-8396
   name: docker
   type: node
   port: 22
   host: docker.mynk.home
   is_extra: true
-- id: server-1752480452059-7710
+  ping_enabled: true
+- id: server-1752502721341-9056
   name: gcv
   type: node
   port: 22
   host: gcv.mynk.home
   is_extra: true
-- id: server-1752480452059-5551
+  ping_enabled: true
+- id: server-1752502721341-8069
   name: go-flow
   type: node
   port: 22
   host: go-flow.mynk.home
   is_extra: true
-- id: server-1752480452060-3498
+  ping_enabled: true
+- id: server-1752502721341-3052
   name: gw
   type: node
   port: 22
   host: gw.mynk.home
   is_extra: true
-- id: server-1752480452060-4698
+  ping_enabled: true
+- id: server-1752502721341-6894
   name: haos
   type: node
   port: 22
   host: haos.mynk.home
   is_extra: true
-- id: server-1752480452064-9394
+  ping_enabled: true
+- id: server-1752502721341-5749
   name: imm
   type: node
   port: 22
   host: imm.mynk.home
   is_extra: true
-- id: server-1752480452064-3103
+  ping_enabled: true
+- id: server-1752502721341-6113
   name: ipmi
   type: node
   port: 22
   host: ipmi.mynk.home
   is_extra: true
-- id: server-1752480452064-2919
+  ping_enabled: true
+- id: server-1752502721341-4587
   name: kibana
   type: node
   port: 22
   host: kibana.mynk.home
   is_extra: true
-- id: server-1752480452064-3079
+  ping_enabled: true
+- id: server-1752502721341-8776
   name: kuma
   type: node
   port: 22
   host: kuma.mynk.home
   is_extra: true
-- id: server-1752480452064-7249
+  ping_enabled: true
+- id: server-1752502721341-6533
   name: l2sw-1
   type: node
   port: 22
   host: l2sw-1.mynk.home
   is_extra: true
-- id: server-1752480452064-8614
+  ping_enabled: true
+- id: server-1752502721341-5336
   name: nas
   type: node
   port: 22
   host: nas.mynk.home
   is_extra: true
-- id: server-1752480452064-4997
+  ping_enabled: true
+- id: server-1752502721342-8201
   name: nas-share
   type: node
   port: 22
   host: nas-share.mynk.home
   is_extra: true
-- id: server-1752480452064-6653
+  ping_enabled: true
+- id: server-1752502721342-1223
   name: ns
   type: node
   port: 22
   host: ns.mynk.home
   is_extra: true
-- id: server-1752480452064-5860
+  ping_enabled: true
+- id: server-1752502721342-2641
   name: obsrv
   type: node
   port: 22
   host: obsrv.mynk.home
   is_extra: true
-- id: server-1752480452064-9618
+  ping_enabled: true
+- id: server-1752502721342-5475
   name: proxy
   type: node
   port: 22
   host: proxy.mynk.home
   is_extra: true
-- id: server-1752480452064-4448
+  ping_enabled: true
+- id: server-1752502721342-6937
   name: pve01
   type: node
   port: 22
   host: pve01.mynk.home
   is_extra: true
-- id: server-1752480452064-2777
+  ping_enabled: true
+- id: server-1752502721342-6649
   name: pve03
   type: node
   port: 22
   host: pve03.mynk.home
   is_extra: true
-- id: server-1752480452064-5398
+  ping_enabled: true
+- id: server-1752502721342-4031
   name: pve04
   type: node
   port: 22
   host: pve04.mynk.home
   is_extra: true
-- id: server-1752480452064-6146
+  ping_enabled: true
+- id: server-1752502721342-4665
   name: radius
   type: node
   port: 22
   host: radius.mynk.home
   is_extra: true
-- id: server-1752480452064-6206
+  ping_enabled: true
+- id: server-1752502721342-6979
   name: raspi
   type: node
   port: 22
   host: raspi.mynk.home
   is_extra: true
-- id: server-1752480452064-7595
+  ping_enabled: true
+- id: server-1752502721342-3521
   name: raspi2
   type: node
   port: 22
   host: raspi2.mynk.home
   is_extra: true
-- id: server-1752480452064-2482
+  ping_enabled: true
+- id: server-1752502721342-5345
   name: srv
   type: node
   port: 22
   host: srv.mynk.home
   is_extra: true
-- id: server-1752480452064-2802
+  ping_enabled: true
+- id: server-1752502721342-4257
   name: tsvpn
   type: node
   port: 22
   host: tsvpn.mynk.home
   is_extra: true
-- id: server-1752480452064-4719
+  ping_enabled: true
+- id: server-1752502721342-2386
   name: ups
   type: node
   port: 22
   host: ups.mynk.home
   is_extra: true
-- id: server-1752480452064-2394
+  ping_enabled: true
+- id: server-1752502721342-9710
   name: www
   type: node
   port: 22
   host: www.mynk.home
   is_extra: true
+  ping_enabled: true
