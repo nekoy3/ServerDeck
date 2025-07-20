@@ -1,42 +1,35 @@
-import re # Added for ping parsing
+import re
 import sys
 import logging
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for, flash, send_from_directory, make_response
 from flask_socketio import SocketIO, emit
-from flask_session import Session # Flask-Sessionをインポート
+from flask_session import Session
 import yaml
 import os
 import paramiko
 import threading
 import time
-import subprocess # Added
-import sys
+import subprocess
 from werkzeug.utils import secure_filename
 from werkzeug.security import check_password_hash
 from functools import wraps
-from datetime import datetime, timedelta # timedeltaをインポート
+from datetime import datetime, timedelta
 import shutil
 import requests
 import random
 
 app = Flask(__name__)
-# IMPORTANT: In a production environment, use a strong, randomly generated secret key
-# and load it from an environment variable or a secure configuration file.
 app.config['SECRET_KEY'] = os.urandom(24)
 
-# Flask-Sessionの設定
 app.config["SESSION_TYPE"] = "filesystem"
 app.config["SESSION_FILE_DIR"] = os.path.join(os.path.dirname(__file__), 'config', 'flask_session')
-app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=1) # セッションの有効期限を1時間に設定
-Session(app) # Flask-Sessionを初期化
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=1)
+Session(app)
 
 socketio = SocketIO(app)
 
 # --- Ping Utility ---
 def ping_host(host, count=1, timeout=1):
-    """
-    Pings a host and returns a dictionary with status, response_time (avg), and packet_loss.
-    """
     param = '-n' if sys.platform.startswith('win') else '-c'
     command = ['ping', param, str(count), '-W' if sys.platform != 'win32' else '-w', str(timeout * 1000 if sys.platform.startswith('win') else timeout), host]
     
@@ -51,14 +44,10 @@ def ping_host(host, count=1, timeout=1):
         else:
             result_data['status'] = 'offline'
 
-        # Packet loss parsing
         packet_loss_match = re.search(r'(\d+)% packet loss', output)
         if packet_loss_match:
             result_data['packet_loss'] = float(packet_loss_match.group(1))
 
-        # Response time parsing (average)
-        # Linux/macOS: rtt min/avg/max/mdev = 10.200/10.200/10.200/0.000 ms
-        # Windows: Minimum = 10ms, Maximum = 10ms, Average = 10ms
         if sys.platform.startswith('win'):
             avg_time_match = re.search(r'Average = (\d+)ms', output)
             if avg_time_match:
@@ -69,8 +58,7 @@ def ping_host(host, count=1, timeout=1):
                 result_data['response_time'] = float(avg_time_match.group(1))
 
         if result_data['status'] == 'online' and result_data['response_time'] is None:
-            # Sometimes ping is online but avg time not found (e.g., very short output)
-            result_data['response_time'] = 0.0 # Default to 0 if online but no time found
+            result_data['response_time'] = 0.0
 
     except subprocess.TimeoutExpired:
         app.logger.debug(f"Ping timed out for {host}")
@@ -102,14 +90,12 @@ SSH_KEYS_CONFIG_PATH = os.path.join(CONFIG_DIR, 'ssh_keys.yaml')
 USERS_CONFIG_PATH = os.path.join(CONFIG_DIR, 'users.yaml')
 EXTRA_IMPORT_CONFIG_PATH = os.path.join(CONFIG_DIR, 'extra_import.yaml')
 UPLOAD_FOLDER = os.path.join(CONFIG_DIR, 'uploaded_ssh_keys')
-os.makedirs(UPLOAD_FOLDER, exist_ok=True);
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 BACKUP_DIR = os.path.join(CONFIG_DIR, 'backup')
-os.makedirs(BACKUP_DIR, exist_ok=True);
+os.makedirs(BACKUP_DIR, exist_ok=True)
 
 active_ssh_sessions = {}
-
-# Global dictionary to store current ping statuses
 server_ping_status = {}
 
 # --- Config Loading/Saving ---
@@ -128,17 +114,13 @@ def backup_config_file(file_path):
         shutil.copy2(file_path, backup_path)
         app.logger.info(f"Backed up {file_name} to {backup_path}")
 
-        # Clean up old backups, keeping only the latest 5 for each type
-        backup_prefix = base_name.split('_')[0] # e.g., 'servers' or 'ssh_keys'
         all_backups = []
         for f in os.listdir(BACKUP_DIR):
-            if f.startswith(backup_prefix) and f.endswith(ext):
+            if f.startswith(base_name.split('_')[0]) and f.endswith(ext):
                 all_backups.append(os.path.join(BACKUP_DIR, f))
 
-        # Sort by modification time (oldest first)
         all_backups.sort(key=os.path.getmtime)
 
-        # Remove oldest backups if count exceeds 5
         while len(all_backups) > 5:
             oldest_backup = all_backups.pop(0)
             os.remove(oldest_backup)
@@ -153,12 +135,15 @@ def load_servers_config():
             config = yaml.safe_load(f) or {"servers": []}
             for server in config.get('servers', []):
                 if 'ping_enabled' not in server:
-                    server['ping_enabled'] = True # Default to True
+                    server['ping_enabled'] = True
+                if 'is_extra' not in server:
+                    server['is_extra'] = False
+                
             return config
     return {"servers": []}
 
 def save_servers_config(config_data):
-    os.makedirs(CONFIG_DIR, exist_ok=True);
+    os.makedirs(CONFIG_DIR, exist_ok=True)
     with open(SERVERS_CONFIG_PATH, 'w') as f:
         yaml.dump(config_data, f, indent=2, sort_keys=False)
     backup_config_file(SERVERS_CONFIG_PATH)
@@ -170,7 +155,7 @@ def load_ssh_keys_config():
     return {"ssh_keys": []}
 
 def save_ssh_keys_config(config_data):
-    os.makedirs(CONFIG_DIR, exist_ok=True);
+    os.makedirs(CONFIG_DIR, exist_ok=True)
     with open(SSH_KEYS_CONFIG_PATH, 'w') as f:
         yaml.dump(config_data, f, indent=2, sort_keys=False)
     backup_config_file(SSH_KEYS_CONFIG_PATH)
@@ -182,6 +167,11 @@ def load_users_config():
             return config
     return {"users": []}
 
+def save_users_config(config_data):
+    os.makedirs(CONFIG_DIR, exist_ok=True)
+    with open(USERS_CONFIG_PATH, 'w') as f:
+        yaml.dump(config_data, f, indent=2, sort_keys=False)
+
 def load_extra_import_config():
     if os.path.exists(EXTRA_IMPORT_CONFIG_PATH):
         with open(EXTRA_IMPORT_CONFIG_PATH, 'r') as f:
@@ -189,7 +179,7 @@ def load_extra_import_config():
             if "url" not in config:
                 config["url"] = ""
             if "previous_url" not in config:
-                config["previous_url"] = ""
+                config["previous_url"] = config["url"]
             return config
     return {"url": "", "previous_url": ""}
 
@@ -212,18 +202,18 @@ def run_extra_import():
         app.logger.info("Running extra import...")
         extra_import_config = load_extra_import_config()
         url = extra_import_config.get('url')
+        previous_url = extra_import_config.get('previous_url', '')
 
         if not url:
             app.logger.info("Extra import URL not configured. Skipping.")
-            # If URL is cleared, remove is_extra and is_new/is_deleted flags from all extra servers
             config = load_servers_config()
             servers = config.get('servers', [])
             updated_servers = []
             for server in servers:
                 if server.get('is_extra'):
-                    server.pop('is_extra', None)
-                    server.pop('is_new', None)
-                    server.pop('is_deleted', None)
+                    server['is_extra'] = False
+                    server['is_new'] = False
+                    server['is_deleted'] = False
                 updated_servers.append(server)
             config['servers'] = updated_servers
             save_servers_config(config)
@@ -233,24 +223,33 @@ def run_extra_import():
             response = requests.get(url, timeout=10)
             response.raise_for_status()
             
-            # The text file contains 'hostname ip' pairs, so we split and take the first part.
-            # Then, remove trailing dot if present.
             imported_hosts = []
             for line in response.text.splitlines():
                 stripped_line = line.strip()
                 if stripped_line:
-                    host_part = stripped_line.split()[0] # Take the first part (hostname)
+                    host_part = stripped_line.split()[0]
                     if host_part.endswith('.'):
-                        host_part = host_part[:-1] # Remove trailing dot
+                        host_part = host_part[:-1]
                     imported_hosts.append(host_part)
 
             config = load_servers_config()
             servers = config.get('servers', [])
-            existing_hosts = [s.get('host') for s in servers]
+            
+            # URLが変更された場合、またはprevious_urlが空でurlが設定されている場合のみis_newをリセット
+            if url != previous_url or (previous_url == "" and url != ""):
+                for server in servers:
+                    if server.get('is_extra'):
+                        server['is_new'] = False
+                        server['is_deleted'] = False
+                extra_import_config['previous_url'] = url
+                save_extra_import_config(extra_import_config)
+                app.logger.info(f"Extra import URL changed from '{previous_url}' to '{url}'. Resetting is_new flags.")
 
-            # Add new servers
+            existing_hosts_map = {s.get('host'): s for s in servers if s.get('host')}
+            
+            newly_added_servers = []
             for host in imported_hosts:
-                if host not in existing_hosts:
+                if host not in existing_hosts_map:
                     new_server = {
                         'id': f"server-{int(time.time() * 1000)}-{random.randint(1000, 9999)}",
                         'name': host.split('.')[0],
@@ -258,25 +257,26 @@ def run_extra_import():
                         'port': 22,
                         'host': host,
                         'is_extra': True,
-                        'is_new': True,  # Flag for green border
+                        'is_new': True, # 新規追加なのでTrue
                         'ping_enabled': True
                     }
                     servers.append(new_server)
+                    newly_added_servers.append(new_server)
                     app.logger.info(f"Added new server from extra import: {host}")
+                else:
+                    # 既存のextra importされたサーバーが引き続き存在する場合
+                    # is_newは既にFalseにリセットされているか、元々Falseなので何もしない
+                    pass
 
-            # Mark existing extra servers that are no longer in the import list as deleted
+            # 削除されたextra importサーバーのマーク
             for server in servers:
                 if server.get('is_extra') and server.get('host') not in imported_hosts:
-                    server['is_deleted'] = True # Flag for red border
-                    server.pop('is_new', None) # Ensure it's not marked as new if it's deleted
-                    app.logger.info(f"Marked server for deletion from extra import: {server.get('host')}")
-                elif server.get('is_extra') and server.get('host') in imported_hosts:
-                    # If an extra server is still in the list, ensure it's not marked for deletion or new
-                    server.pop('is_deleted', None)
-                    server.pop('is_new', None)
+                    server['is_deleted'] = True
+                    server.pop('is_new', None) # 削除されるものはis_newを削除
 
             save_servers_config(config)
             app.logger.info("Extra import finished.")
+            socketio.emit('extra_import_finished')
 
         except requests.RequestException as e:
             app.logger.error(f"Error during extra import: {e}")
@@ -301,192 +301,12 @@ def run_ping_monitoring():
                     app.logger.debug(f"Pinging {host} (ID: {server_id}) for monitoring...")
                     ping_result = ping_host(host)
                     server_ping_status[server_id] = ping_result
-                    # Emit SocketIO event for real-time update
                     socketio.start_background_task(socketio.emit, 'ping_status_update', {'server_id': server_id, 'status': ping_result['status'], 'response_time': ping_result['response_time'], 'packet_loss': ping_result['packet_loss']})
                 elif server_id and server_id in server_ping_status:
-                    # If ping is disabled, remove from active monitoring and clear status
                     del server_ping_status[server_id]
                     socketio.start_background_task(socketio.emit, 'ping_status_update', {'server_id': server_id, 'status': 'disabled', 'response_time': None, 'packet_loss': None})
 
-            time.sleep(10) # Ping every 10 seconds
-
-# --- Authentication ---
-def backup_config_file(file_path):
-    try:
-        if not os.path.exists(file_path):
-            app.logger.warning(f"Backup failed: Source file does not exist: {file_path}")
-            return
-
-        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-        file_name = os.path.basename(file_path)
-        base_name, ext = os.path.splitext(file_name)
-        backup_file_name = f"{base_name.split('_')[0]}_{timestamp}{ext}"
-        backup_path = os.path.join(BACKUP_DIR, backup_file_name)
-
-        shutil.copy2(file_path, backup_path)
-        app.logger.info(f"Backed up {file_name} to {backup_path}")
-
-        # Clean up old backups, keeping only the latest 5 for each type
-        backup_prefix = base_name.split('_')[0] # e.g., 'servers' or 'ssh_keys'
-        all_backups = []
-        for f in os.listdir(BACKUP_DIR):
-            if f.startswith(backup_prefix) and f.endswith(ext):
-                all_backups.append(os.path.join(BACKUP_DIR, f))
-
-        # Sort by modification time (oldest first)
-        all_backups.sort(key=os.path.getmtime)
-
-        # Remove oldest backups if count exceeds 5
-        while len(all_backups) > 5:
-            oldest_backup = all_backups.pop(0)
-            os.remove(oldest_backup)
-            app.logger.info(f"Removed old backup: {oldest_backup}")
-
-    except Exception as e:
-        app.logger.error(f"Error backing up {file_path}: {e}")
-
-def load_servers_config():
-    if os.path.exists(SERVERS_CONFIG_PATH):
-        with open(SERVERS_CONFIG_PATH, 'r') as f:
-            config = yaml.safe_load(f) or {"servers": []}
-            for server in config.get('servers', []):
-                if 'ping_enabled' not in server:
-                    server['ping_enabled'] = True # Default to True
-            return config
-    return {"servers": []}
-
-def save_servers_config(config_data):
-    os.makedirs(CONFIG_DIR, exist_ok=True);
-    with open(SERVERS_CONFIG_PATH, 'w') as f:
-        yaml.dump(config_data, f, indent=2, sort_keys=False)
-    backup_config_file(SERVERS_CONFIG_PATH)
-
-def load_ssh_keys_config():
-    if os.path.exists(SSH_KEYS_CONFIG_PATH):
-        with open(SSH_KEYS_CONFIG_PATH, 'r') as f:
-            return yaml.safe_load(f) or {"ssh_keys": []}
-    return {"ssh_keys": []}
-
-def save_ssh_keys_config(config_data):
-    os.makedirs(CONFIG_DIR, exist_ok=True);
-    with open(SSH_KEYS_CONFIG_PATH, 'w') as f:
-        yaml.dump(config_data, f, indent=2, sort_keys=False)
-    backup_config_file(SSH_KEYS_CONFIG_PATH)
-
-def load_users_config():
-    if os.path.exists(USERS_CONFIG_PATH):
-        with open(USERS_CONFIG_PATH, 'r') as f:
-            config = yaml.safe_load(f) or {"users": []}
-            return config
-    return {"users": []}
-
-def save_users_config(config_data):
-    os.makedirs(CONFIG_DIR, exist_ok=True);
-    with open(USERS_CONFIG_PATH, 'w') as f:
-        yaml.dump(config_data, f, indent=2, sort_keys=False)
-
-def load_extra_import_config():
-    if os.path.exists(EXTRA_IMPORT_CONFIG_PATH):
-        with open(EXTRA_IMPORT_CONFIG_PATH, 'r') as f:
-            config = yaml.safe_load(f) or {}
-            if "url" not in config:
-                config["url"] = ""
-            if "previous_url" not in config:
-                config["previous_url"] = ""
-            return config
-    return {"url": "", "previous_url": ""}
-
-def save_extra_import_config(config_data):
-    os.makedirs(CONFIG_DIR, exist_ok=True)
-    with open(EXTRA_IMPORT_CONFIG_PATH, 'w') as f:
-        yaml.dump(config_data, f, indent=2, sort_keys=False)
-
-
-# Type display names mapping
-TYPE_DISPLAY_NAMES = {
-    'node': 'ノード',
-    'virtual_machine': '仮想マシン',
-    'network_device': 'ネットワークデバイス',
-    'kvm': 'KVM',
-}
-
-def run_extra_import():
-    with app.app_context():
-        app.logger.info("Running extra import...")
-        extra_import_config = load_extra_import_config()
-        url = extra_import_config.get('url')
-
-        if not url:
-            app.logger.info("Extra import URL not configured. Skipping.")
-            # If URL is cleared, remove is_extra and is_new/is_deleted flags from all extra servers
-            config = load_servers_config()
-            servers = config.get('servers', [])
-            updated_servers = []
-            for server in servers:
-                if server.get('is_extra'):
-                    server.pop('is_extra', None)
-                    server.pop('is_new', None)
-                    server.pop('is_deleted', None)
-                updated_servers.append(server)
-            config['servers'] = updated_servers
-            save_servers_config(config)
-            return
-
-        try:
-            response = requests.get(url, timeout=10)
-            response.raise_for_status()
-            
-            # The text file contains 'hostname ip' pairs, so we split and take the first part.
-            # Then, remove trailing dot if present.
-            imported_hosts = []
-            for line in response.text.splitlines():
-                stripped_line = line.strip()
-                if stripped_line:
-                    host_part = stripped_line.split()[0] # Take the first part (hostname)
-                    if host_part.endswith('.'):
-                        host_part = host_part[:-1] # Remove trailing dot
-                    imported_hosts.append(host_part)
-
-            config = load_servers_config()
-            servers = config.get('servers', [])
-            existing_hosts = [s.get('host') for s in servers]
-
-            # Add new servers
-            for host in imported_hosts:
-                if host not in existing_hosts:
-                    new_server = {
-                        'id': f"server-{int(time.time() * 1000)}-{random.randint(1000, 9999)}",
-                        'name': host.split('.')[0],
-                        'type': 'node',
-                        'port': 22,
-                        'host': host,
-                        'is_extra': True,
-                        'is_new': True,  # Flag for green border
-                        'ping_enabled': True
-                    }
-                    servers.append(new_server)
-                    app.logger.info(f"Added new server from extra import: {host}")
-
-            # Mark existing extra servers that are no longer in the import list as deleted
-            for server in servers:
-                if server.get('is_extra') and server.get('host') not in imported_hosts:
-                    server['is_deleted'] = True # Flag for red border
-                    server.pop('is_new', None) # Ensure it's not marked as new if it's deleted
-                    app.logger.info(f"Marked server for deletion from extra import: {server.get('host')}")
-                elif server.get('is_extra') and server.get('host') in imported_hosts:
-                    # If an extra server is still in the list, ensure it's not marked for deletion or new
-                    server.pop('is_deleted', None)
-                    server.pop('is_new', None)
-
-            save_servers_config(config)
-            app.logger.info("Extra import finished.")
-
-        except requests.RequestException as e:
-            app.logger.error(f"Error during extra import: {e}")
-
-def schedule_extra_import():
-    run_extra_import()
-    threading.Timer(300, schedule_extra_import).start()
+            time.sleep(10)
 
 # --- Authentication ---
 def login_required(f):
@@ -494,7 +314,6 @@ def login_required(f):
     def decorated_function(*args, **kwargs):
         if 'username' not in session:
             return redirect(url_for('login', next=request.url))
-        # Flask-Sessionがセッションの永続化と有効期限を管理するため、last_activeのチェックは不要
         return f(*args, **kwargs)
     return decorated_function
 
@@ -511,7 +330,6 @@ def login():
         
         if user and check_password_hash(user['password_hash'], password):
             session['username'] = user['username']
-            # Flask-Sessionがセッションの永続化と有効期限を管理するため、last_activeの更新は不要
             flash('Logged in successfully.', 'success')
             next_page = request.args.get('next')
             return redirect(next_page or url_for('index'))
@@ -595,12 +413,10 @@ def update_server(server_id):
     found = False
     for i, server in enumerate(servers):
         if server['id'] == server_id:
-            # Merge existing data with updated data
             servers[i] = {**server, **updated_data}
-            # When a server is manually edited, remove the 'new', 'deleted', and 'extra' flags
-            servers[i].pop('is_new', None)
-            servers[i].pop('is_deleted', None)
-            servers[i].pop('is_extra', None) # Remove is_extra flag on manual edit
+            servers[i]['is_new'] = False
+            servers[i]['is_deleted'] = False
+            # is_extraフラグはそのまま維持（Extra Import管理から外さない）
             found = True
             break
     if not found:
@@ -638,7 +454,6 @@ def bulk_delete_servers():
         servers = config.get('servers', [])
         original_len = len(servers)
         
-        # Filter out servers that are in the deletion list
         servers = [s for s in servers if s['id'] not in server_ids_to_delete]
         
         if len(servers) == original_len:
@@ -653,13 +468,13 @@ def bulk_delete_servers():
         app.logger.error(f"Error during bulk_delete_servers: {e}")
         return jsonify({"status": "error", "message": f"Failed to delete servers: {e}"}), 500
 
-@app.route('/api/extra_import_url', methods=['GET'])
+@app.route('/api/config/extra_import_url', methods=['GET'])
 @login_required
 def get_extra_import_url():
     config = load_extra_import_config()
     return jsonify(config)
 
-@app.route('/api/extra_import_url', methods=['POST'])
+@app.route('/api/config/extra_import_url', methods=['POST'])
 @login_required
 def set_extra_import_url():
     data = request.json
@@ -669,31 +484,25 @@ def set_extra_import_url():
     current_url = extra_import_config.get('url', '')
     previous_url = extra_import_config.get('previous_url', '')
 
+    app.logger.debug(f"set_extra_import_url: new_url='{new_url}', current_url='{current_url}', previous_url='{previous_url}'")
+    app.logger.debug(f"set_extra_import_url: new_url != current_url is {new_url != current_url}")
+
     if new_url != current_url:
-        # URL has changed or been cleared
         extra_import_config['url'] = new_url
-        extra_import_config['previous_url'] = current_url # Store current as previous
+        # previous_urlはrun_extra_importで更新されるため、ここでは設定しない
         save_extra_import_config(extra_import_config)
+        app.logger.info("Extra import URL changed and saved.")
 
-        # Mark existing is_extra servers for potential deletion/modification
-        config = load_servers_config()
-        servers = config.get('servers', [])
-        affected_servers = []
-        for server in servers:
-            if server.get('is_extra'):
-                server['is_deleted'] = True # Mark for red border
-                server.pop('is_new', None) # Ensure it's not marked as new
-                affected_servers.append(server)
-        save_servers_config(config) # Save the marked state
-
-        if affected_servers:
-            return jsonify({"message": "URL changed. Confirmation needed for existing extra imported servers.", "confirmation_needed": True}), 200
-        else:
-            # No existing extra servers, just run import
-            threading.Thread(target=run_extra_import).start()
-            return jsonify({"message": "URL saved, import started."}), 200
+        # affected_serversは常に空になるので、このif文は不要になる
+        # if affected_servers:
+        #     app.logger.info("Confirmation needed for existing extra imported servers.")
+        #     return jsonify({"message": "URL changed. Confirmation needed for existing extra imported servers.", "confirmation_needed": True}), 200
+        # else:
+        app.logger.info("Starting import directly after URL change.")
+        threading.Thread(target=run_extra_import).start()
+        return jsonify({"message": "URL saved, import started."}), 200
     else:
-        # URL is the same, just run import if it's not already running
+        app.logger.info("URL is unchanged, re-triggering import.")
         threading.Thread(target=run_extra_import).start()
         return jsonify({"message": "URL is unchanged, import re-triggered."}), 200
 
@@ -702,39 +511,58 @@ def set_extra_import_url():
 @login_required
 def confirm_extra_import_action():
     data = request.json
-    action = data.get('action') # 'delete_all', 'keep_all', 'cancel'
+    action = data.get('action')
 
     config = load_servers_config()
     servers = config.get('servers', [])
     extra_import_config = load_extra_import_config()
     
     if action == 'delete_all':
-        # Remove all servers that were marked as is_extra and is_deleted
         servers = [s for s in servers if not (s.get('is_extra') and s.get('is_deleted'))]
         app.logger.info("Confirmed: Deleted all extra imported servers marked for deletion.")
     elif action == 'keep_all':
-        # For servers marked as is_extra and is_deleted, set is_extra to false and remove is_deleted
         for server in servers:
             if server.get('is_extra') and server.get('is_deleted'):
                 server['is_extra'] = False
                 server.pop('is_deleted', None)
-                server.pop('is_new', None) # Also remove is_new if it was there
+                server.pop('is_new', None)
         app.logger.info("Confirmed: Kept all extra imported servers, removed extra import flag.")
+    elif action == 'delete_single':
+        server_id = data.get('server_id')
+        if server_id:
+            app.logger.info(f"Attempting to delete single extra imported server with ID: {server_id}")
+            original_len = len(servers)
+            servers = [s for s in servers if not (s['id'] == server_id and s.get('is_extra') and s.get('is_deleted'))]
+            app.logger.info(f"After deletion attempt, servers count changed from {original_len} to {len(servers)}.")
+            app.logger.info(f"Confirmed: Deleted single extra imported server: {server_id}")
+        else:
+            return jsonify({"error": "Server ID not provided for single delete."}), 400
+    elif action == 'keep_single':
+        server_id = data.get('server_id')
+        if server_id:
+            for server in servers:
+                if server['id'] == server_id and server.get('is_extra') and server.get('is_deleted'):
+                    server['is_extra'] = False
+                    server.pop('is_deleted', None)
+                    server.pop('is_new', None)
+                    app.logger.info(f"Confirmed: Kept single extra imported server, removed extra import flag: {server_id}")
+                    break
+        else:
+            return jsonify({"error": "Server ID not provided for single keep."}), 400
     elif action == 'cancel':
-        # Revert URL to previous_url and remove is_deleted flags from is_extra servers
         extra_import_config['url'] = extra_import_config.get('previous_url', '')
         for server in servers:
             if server.get('is_extra') and server.get('is_deleted'):
                 server.pop('is_deleted', None)
-                server.pop('is_new', None) # Also remove is_new if it was there
+                server.pop('is_new', None)
         app.logger.info("Confirmed: Canceled URL change, reverted to previous URL.")
     else:
         return jsonify({"error": "Invalid action specified."}), 400
 
     save_servers_config(config)
-    save_extra_import_config(extra_import_config) # Save updated extra import config
+    app.logger.info("Servers config saved after extra import action.")
+    save_extra_import_config(extra_import_config)
 
-    # After confirmation, run the extra import again with the (potentially reverted) new URL
     threading.Thread(target=run_extra_import).start()
     return jsonify({"message": f"Action '{action}' processed. Extra import re-triggered."}), 200
 
@@ -742,7 +570,6 @@ def confirm_extra_import_action():
 @app.route('/api/ping_status/<server_id>', methods=['GET'])
 @login_required
 def get_ping_status(server_id):
-    # Retrieve ping status from the global monitoring dictionary
     ping_result = server_ping_status.get(server_id, {'status': 'unknown', 'response_time': None, 'packet_loss': None})
     return jsonify(ping_result)
 
@@ -820,8 +647,7 @@ def upload_ssh_key_file():
     filename = secure_filename(file.filename)
     filepath = os.path.join(UPLOAD_FOLDER, filename)
     file.save(filepath)
-    os.chmod(filepath, 0o600);
-    # Refactored key validation logic
+    os.chmod(filepath, 0o600)
     key_types_to_try = (paramiko.RSAKey, paramiko.ECDSAKey, paramiko.Ed25519Key)
     last_error = None
 
@@ -832,18 +658,14 @@ def upload_ssh_key_file():
             return jsonify({'path': filepath}), 200
         except paramiko.PasswordRequiredException:
             last_error = 'SSH key requires a passphrase, which is not supported.'
-            # This is a definitive failure, so we break the loop.
             break
         except paramiko.SSHException as e:
-            # This key type didn't work, so we'll try the next one.
             last_error = str(e)
             continue
         except Exception as e:
-            # Catch any other unexpected errors during parsing
             last_error = f"An unexpected error occurred during validation: {e}"
             continue
 
-    # If we've gone through the whole loop and nothing worked:
     os.remove(filepath)
     error_message = f"Invalid or unsupported SSH key format. Last error: {last_error}"
     app.logger.error(f"Failed to validate key '{filename}'. Reason: {error_message}")
@@ -862,7 +684,6 @@ def bulk_delete_ssh_keys():
     ssh_keys = config.get('ssh_keys', [])
     original_len = len(ssh_keys)
     
-    # Filter out keys that are in the deletion list
     ssh_keys = [k for k in ssh_keys if k['id'] not in key_ids_to_delete]
     
     if len(ssh_keys) == original_len:
@@ -887,7 +708,6 @@ def list_backups():
                         'size': os.path.getsize(file_path),
                         'last_modified': datetime.fromtimestamp(os.path.getmtime(file_path)).isoformat()
                     })
-        # Sort by last modified, newest first
         backup_files.sort(key=lambda x: x['last_modified'], reverse=True)
         return jsonify(backup_files)
     except Exception as e:
@@ -928,11 +748,9 @@ def import_config():
         return jsonify({'error': 'No selected file'}), 400
 
     try:
-        # Read the uploaded YAML content
         uploaded_content = file.read().decode('utf-8')
         new_config = yaml.safe_load(uploaded_content)
 
-        # Determine if it's a servers.yaml or ssh_keys.yaml backup
         if 'servers' in new_config:
             save_servers_config(new_config)
             return jsonify({"message": "Servers configuration imported successfully"}), 200
@@ -955,16 +773,13 @@ def export_config():
         servers_config = load_servers_config()
         ssh_keys_config = load_ssh_keys_config()
 
-        # Combine into a single dictionary for export
         full_config = {
             "servers": servers_config.get("servers", []),
             "ssh_keys": ssh_keys_config.get("ssh_keys", [])
         }
 
-        # Dump to YAML string
         yaml_string = yaml.dump(full_config, indent=2, sort_keys=False)
 
-        # Send as a file
         response = make_response(yaml_string)
         response.headers["Content-Disposition"] = "attachment; filename=serverdeck_config_export.yaml"
         response.headers["Content-Type"] = "application/x-yaml"
@@ -980,65 +795,64 @@ def _is_authenticated():
 @socketio.on('connect')
 def handle_connect():
     if not _is_authenticated():
-        app.logger.warning(f"Unauthenticated socket connection attempt rejected from SID: {request.sid}");
+        app.logger.warning(f"Unauthenticated socket connection attempt rejected from SID: {request.sid}")
         return False
-    app.logger.debug(f"Authenticated client connected! SID: {request.sid}, User: {session.get('username')}");
+    app.logger.debug(f"Authenticated client connected! SID: {request.sid}, User: {session.get('username')}")
 
 def _ssh_read_loop(chan, sid):
     while True:
         if chan.recv_ready():
-            output = chan.recv(4096).decode('utf-8', errors='ignore');
-            socketio.emit('ssh_output', {'output': output}, room=sid);
-        time.sleep(0.01);
+            output = chan.recv(4096).decode('utf-8', errors='ignore')
+            socketio.emit('ssh_output', {'output': output}, room=sid)
+        time.sleep(0.01)
 
 @socketio.on('start_ssh')
 def handle_start_ssh(data):
     if not _is_authenticated():
-        emit('ssh_output', {'output': 'Authentication required.\r\n'});
+        emit('ssh_output', {'output': 'Authentication required.\r\n'})
         return
-    app.logger.debug(f"Received start_ssh event. Data: {data}, SID: {request.sid}");
-    server_id = data.get('server_id');
-    sid = request.sid;
-    app.logger.debug(f"Attempting to start SSH for server_id: {server_id} (SID: {sid})");
-    config = load_servers_config();
-    server_info = next((s for s in config.get('servers', []) if s['id'] == server_id), None);
+    app.logger.debug(f"Received start_ssh event. Data: {data}, SID: {request.sid}")
+    server_id = data.get('server_id')
+    sid = request.sid
+    app.logger.debug(f"Attempting to start SSH for server_id: {server_id} (SID: {sid})")
+    config = load_servers_config()
+    server_info = next((s for s in config.get('servers', []) if s['id'] == server_id), None)
     if not server_info:
-        app.logger.debug(f"Server '{server_id}' not found.");
-        emit('ssh_output', {'output': f"Error: Server '{server_id}' not found in configuration.\r\n"});
+        app.logger.debug(f"Server '{server_id}' not found.")
+        emit('ssh_output', {'output': f"Error: Server '{server_id}' not found in configuration.\r\n"})
         return
-    # Allow SSH connection for 'node', 'virtual_machine', 'network_device', 'container' types
     ssh_connectable_types = ['node', 'virtual_machine', 'network_device', 'kvm']
     if server_info.get('type') not in ssh_connectable_types:
-        app.logger.debug(f"Server '{server_id}' is not an SSH connectable type server.");
-        emit('ssh_output', {'output': f"Error: Server '{server_id}' is not an SSH connectable type server.\r\n"});
+        app.logger.debug(f"Server '{server_id}' is not an SSH connectable type server.")
+        emit('ssh_output', {'output': f"Error: Server '{server_id}' is not an SSH connectable type server.\r\n"})
         return
     try:
-        client = paramiko.SSHClient();
-        client.load_system_host_keys();
-        client.set_missing_host_key_policy(paramiko.AutoAddPolicy());
-        hostname = server_info.get('host');
-        port = server_info.get('port', 22);
-        username = server_info.get('username');
-        password = server_info.get('password');
-        ssh_key_id = server_info.get('ssh_key_id');
+        client = paramiko.SSHClient()
+        client.load_system_host_keys()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        hostname = server_info.get('host')
+        port = server_info.get('port', 22)
+        username = server_info.get('username')
+        password = server_info.get('password')
+        ssh_key_id = server_info.get('ssh_key_id')
         if ssh_key_id:
-            ssh_keys_config = load_ssh_keys_config();
-            ssh_key_info = next((k for k in ssh_keys_config.get('ssh_keys', []) if k['id'] == ssh_key_id), None);
-            app.logger.debug(f"Attempting to load key '{ssh_key_id}' with info: {ssh_key_info}");
+            ssh_keys_config = load_ssh_keys_config()
+            ssh_key_info = next((k for k in ssh_keys_config.get('ssh_keys', []) if k['id'] == ssh_key_id), None)
+            app.logger.debug(f"Attempting to load key '{ssh_key_id}' with info: {ssh_key_info}")
             if ssh_key_info and os.path.exists(os.path.expanduser(ssh_key_info['path'])):
                 try:
-                    key_path_expanded = os.path.expanduser(ssh_key_info['path']);
-                    app.logger.debug(f"Expanded key path: {key_path_expanded}");
+                    key_path_expanded = os.path.expanduser(ssh_key_info['path'])
+                    app.logger.debug(f"Expanded key path: {key_path_expanded}")
                     try:
-                        key = paramiko.RSAKey.from_private_key_file(key_path_expanded);
+                        key = paramiko.RSAKey.from_private_key_file(key_path_expanded)
                     except paramiko.SSHException as e:
-                        app.logger.debug(f"RSAKey load failed: {e}. Attempting Ed25519Key.");
+                        app.logger.debug(f"RSAKey load failed: {e}. Attempting Ed25519Key.")
                         try:
-                            key = paramiko.Ed25519Key(filename=key_path_expanded);
+                            key = paramiko.Ed25519Key(filename=key_path_expanded)
                         except Exception as ed25519_e:
-                            app.logger.debug(f"Ed25519Key load failed: {ed25519_e}.");
-                            emit('ssh_output', {'output': f"Error loading SSH Key '{ssh_key_info['name']}': {e} (RSA) / {ed25519_e} (Ed25519)\r\n"});
-                            client.close();
+                            app.logger.debug(f"Ed25519Key load failed: {ed25519_e}.")
+                            emit('ssh_output', {'output': f"Error loading SSH Key '{ssh_key_info['name']}': {e} (RSA) / {ed25519_e} (Ed25519)\r\n"})
+                            client.close()
                             return
                     client.connect(
                         hostname=hostname,
@@ -1048,78 +862,78 @@ def handle_start_ssh(data):
                         timeout=10,
                         look_for_keys=False,
                         allow_agent=False
-                    );
-                    app.logger.debug(f"SSH connected to {hostname} using key: {ssh_key_info['name']}");
+                    )
+                    app.logger.debug(f"SSH connected to {hostname} using key: {ssh_key_info['name']}")
                 except paramiko.PasswordRequiredException:
-                    app.logger.debug(f"Key '{ssh_key_info['name']}' requires passphrase.");
-                    emit('ssh_output', {'output': f"Error: SSH Key '{ssh_key_info['name']}' requires a passphrase.\r\n"});
-                    client.close();
+                    app.logger.debug(f"Key '{ssh_key_info['name']}' requires passphrase.")
+                    emit('ssh_output', {'output': f"Error: SSH Key '{ssh_key_info['name']}' requires a passphrase.\r\n"})
+                    client.close()
                     return
                 except Exception as e:
-                    app.logger.debug(f"Error loading SSH Key '{ssh_key_info['name']}': {e}");
-                    emit('ssh_output', {'output': f"Error loading SSH Key '{ssh_key_info['name']}': {e}\r\n"});
-                    client.close();
+                    app.logger.debug(f"Error loading SSH Key '{ssh_key_info['name']}': {e}")
+                    emit('ssh_output', {'output': f"Error loading SSH Key '{ssh_key_info['name']}': {e}\r\n"})
+                    client.close()
                     return
             else:
-                app.logger.debug(f"SSH Key '{ssh_key_id}' not found or path invalid (info: {ssh_key_info}).");
-                emit('ssh_output', {'output': f"Error: SSH Key '{ssh_key_id}' not found or path invalid.\r\n"});
-                client.close();
+                app.logger.debug(f"SSH Key '{ssh_key_id}' not found or path invalid (info: {ssh_key_info}).")
+                emit('ssh_output', {'output': f"Error: SSH Key '{ssh_key_id}' not found or path invalid.\r\n"})
+                client.close()
                 return
         elif password:
-            app.logger.debug(f"Attempting password authentication for {hostname}");
-            client.connect(hostname=hostname, port=port, username=username, password=password, timeout=10);
-            app.logger.debug(f"SSH connected to {hostname} using password.");
+            app.logger.debug(f"Attempting password authentication for {hostname}")
+            client.connect(hostname=hostname, port=port, username=username, password=password, timeout=10)
+            app.logger.debug(f"SSH connected to {hostname} using password.")
         else:
-            app.logger.debug(f"No valid authentication method provided.");
-            emit('ssh_output', {'output': "Error: No valid authentication method (password or SSH key) provided.\r\n"});
-            client.close();
+            app.logger.debug(f"No valid authentication method provided.")
+            emit('ssh_output', {'output': "Error: No valid authentication method (password or SSH key) provided.\r\n"})
+            client.close()
             return
-        chan = client.invoke_shell();
-        chan.settimeout(0.0);
-        active_ssh_sessions[sid] = {'client': client, 'channel': chan};
-        emit('ssh_output', {'output': f"Successfully connected to {hostname}.\r\n"});
-        threading.Thread(target=_ssh_read_loop, args=(chan, sid), daemon=True).start();
+        chan = client.invoke_shell()
+        chan.settimeout(0.0)
+        active_ssh_sessions[sid] = {'client': client, 'channel': chan}
+        emit('ssh_output', {'output': f"Successfully connected to {hostname}.\r\n"})
+        threading.Thread(target=_ssh_read_loop, args=(chan, sid), daemon=True).start()
     except paramiko.AuthenticationException:
-        app.logger.debug(f"Authentication failed for {hostname}.");
-        emit('ssh_output', {'output': "Authentication failed. Please check your credentials.\r\n"});
+        app.logger.debug(f"Authentication failed for {hostname}.")
+        emit('ssh_output', {'output': "Authentication failed. Please check your credentials.\r\n"})
     except paramiko.SSHException as e:
-        app.logger.debug(f"SSH error for {hostname}: {e}");
-        emit('ssh_output', {'output': f"SSH error: {e}\r\n"});
+        app.logger.debug(f"SSH error for {hostname}: {e}")
+        emit('ssh_output', {'output': f"SSH error: {e}\r\n"})
     except Exception as e:
-        app.logger.debug(f"General connection error for {hostname}: {e}");
-        emit('ssh_output', {'output': f"Connection error: {e}\r\n"});
+        app.logger.debug(f"General connection error for {hostname}: {e}")
+        emit('ssh_output', {'output': f"Connection error: {e}\r\n"})
 
 @socketio.on('ssh_input')
 def handle_ssh_input(data):
     if not _is_authenticated():
         return
-    sid = request.sid;
+    sid = request.sid
     if sid in active_ssh_sessions:
-        chan = active_ssh_sessions[sid]['channel'];
-        chan.send(data['input']);
+        chan = active_ssh_sessions[sid]['channel']
+        chan.send(data['input'])
 
 @socketio.on('resize_terminal')
 def handle_resize_terminal(data):
     if not _is_authenticated():
         return
-    sid = request.sid;
+    sid = request.sid
     if sid in active_ssh_sessions:
-        chan = active_ssh_sessions[sid]['channel'];
-        cols = data.get('cols', 80);
-        rows = data.get('rows', 24);
-        chan.resize_pty(cols, rows);
+        chan = active_ssh_sessions[sid]['channel']
+        cols = data.get('cols', 80)
+        rows = data.get('rows', 24)
+        chan.resize_pty(cols, rows)
 
 @socketio.on('disconnect')
 def handle_disconnect():
-    sid = request.sid;
-    app.logger.debug(f"Client disconnected (SID: {sid})");
+    sid = request.sid
+    app.logger.debug(f"Client disconnected (SID: {sid})")
     if sid in active_ssh_sessions:
-        client = active_ssh_sessions[sid]['client'];
-        client.close();
-        del active_ssh_sessions[sid];
-        app.logger.debug(f"SSH session closed for SID: {sid}");
+        client = active_ssh_sessions[sid]['client']
+        client.close()
+        del active_ssh_sessions[sid]
+        app.logger.debug(f"SSH session closed for SID: {sid}")
 
 if __name__ == '__main__':
     threading.Thread(target=schedule_extra_import, daemon=True).start()
-    threading.Thread(target=run_ping_monitoring, daemon=True).start() # Start ping monitoring thread
-    socketio.run(app, host='0.0.0.0', debug=True, allow_unsafe_werkzeug=True, port=5001);
+    threading.Thread(target=run_ping_monitoring, daemon=True).start()
+    socketio.run(app, host='0.0.0.0', debug=True, allow_unsafe_werkzeug=True, port=5001)

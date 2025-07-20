@@ -110,8 +110,66 @@ document.addEventListener('DOMContentLoaded', function() {
         updatePingStatus(data.server_id, data);
     });
 
+    socket.on('extra_import_finished', function() {
+        console.log('Received extra_import_finished event. Reloading servers.');
+        loadServersForConfigModal();
+        updateMainPageServerCards(); // メインページも更新
+    });
+
     // 初回ロード時にPingステータスを更新
     updatePingStatus();
+
+    // メインページのサーバーカードを更新する関数
+    function updateMainPageServerCards() {
+        fetch('/api/servers')
+            .then(response => response.json())
+            .then(servers => {
+                // メインページ上のすべてのサーバーカードを更新
+                servers.forEach(server => {
+                    const serverCard = document.querySelector(`[data-server-id="${server.id}"]`);
+                    if (serverCard && !serverCard.classList.contains('config-server-card')) {
+                        // 緑枠・赤枠の更新
+                        serverCard.classList.remove('border-success', 'border-danger');
+                        if (server.is_new) {
+                            serverCard.classList.add('border-success');
+                        } else if (server.is_deleted) {
+                            serverCard.classList.add('border-danger');
+                        }
+
+                        // サーバー情報の更新
+                        const titleElement = serverCard.querySelector('.server-card-title');
+                        const typeElement = serverCard.querySelector('.server-card-text');
+                        if (titleElement) titleElement.textContent = server.name;
+                        if (typeElement) typeElement.innerHTML = `<strong>タイプ:</strong> ${server.display_type || server.type}`;
+
+                        // ボタンの更新
+                        const cardFooter = serverCard.querySelector('.server-card-footer');
+                        if (cardFooter) {
+                            let buttonsHtml = '';
+                            if (server.is_new) {
+                                buttonsHtml = `<button class="btn btn-sm btn-success setup-btn" data-id="${server.id}">設定</button>`;
+                            } else if (server.is_deleted) {
+                                buttonsHtml = `
+                                    <button class="btn btn-sm btn-danger confirm-delete-btn" data-id="${server.id}">削除</button>
+                                    <button class="btn btn-sm btn-secondary cancel-delete-btn" data-id="${server.id}">維持</button>
+                                `;
+                            } else {
+                                // 通常のサーバーはSSH接続ボタンのみ
+                                const sshConnectableTypes = ['node', 'virtual_machine', 'network_device', 'kvm'];
+                                if (sshConnectableTypes.includes(server.type)) {
+                                    buttonsHtml = `<a href="/ssh/${server.id}" class="btn btn-sm btn-primary" target="_blank">SSH接続</a>`;
+                                }
+                            }
+                            cardFooter.innerHTML = buttonsHtml;
+                        }
+                    }
+                });
+
+                // イベントリスナーを再アタッチ
+                attachServerCardEventListeners();
+            })
+            .catch(error => console.error('Error updating main page server cards:', error));
+    }
 
     // --- SSHキーのドロップダウンをロードする ---
     function loadSshKeysForEditModal(selectedKeyId) {
@@ -156,24 +214,59 @@ document.addEventListener('DOMContentLoaded', function() {
     // イベントハンドラー関数を定義
     function handleEditServerClick() {
         const serverId = this.dataset.id;
+        
+        // 設定モーダル内からクリックされた場合、設定モーダルを閉じる
+        const configModal = bootstrap.Modal.getInstance(document.getElementById('configModal'));
+        if (configModal) {
+            configModal.hide();
+            // モーダルが完全に閉じられてから編集モーダルを開く
+            setTimeout(() => {
+                openEditModalForServer(serverId);
+            }, 300); // Bootstrap のアニメーション時間を考慮
+        } else {
+            // メインページから直接呼ばれた場合
+            openEditModalForServer(serverId);
+        }
+    }
+
+    // サーバー編集モーダルを開く共通関数
+    function openEditModalForServer(serverId) {
         fetch(`/api/servers/${serverId}`)
             .then(response => response.ok ? response.json() : Promise.reject(response))
             .then(server => {
                 const editModalElement = document.getElementById('editServerModal');
+                if (!editModalElement) {
+                    console.error('Edit modal element not found');
+                    return;
+                }
                 const editModal = new bootstrap.Modal(editModalElement);
 
-                // モーダルが表示される直前にフィールドを設定
-                document.getElementById('editServerId').value = server.id;
-                document.getElementById('editServerName').value = server.name;
-                document.getElementById('editServerHost').value = server.host || '';
-                document.getElementById('editServerPort').value = server.port || '22';
-                document.getElementById('editServerType').value = server.type;
-                document.getElementById('editServerUrl').value = server.url || '';
-                document.getElementById('editServerDescription').value = server.description || '';
-                document.getElementById('editServerTags').value = server.tags ? server.tags.join(', ') : '';
+                // 必要な要素の存在確認と値の設定
+                const elements = {
+                    'editServerId': server.id,
+                    'editServerName': server.name,
+                    'editServerHost': server.host || '',
+                    'editServerPort': server.port || '22',
+                    'editServerType': server.type,
+                    'editServerUrl': server.url || '',
+                    'editServerDescription': server.description || '',
+                    'editServerTags': server.tags ? server.tags.join(', ') : ''
+                };
+
+                for (const [elementId, value] of Object.entries(elements)) {
+                    const element = document.getElementById(elementId);
+                    if (element) {
+                        element.value = value;
+                    } else {
+                        console.warn(`Element with id ${elementId} not found`);
+                    }
+                }
                 
                 // Ping監視設定
-                document.getElementById('editPingEnabled').checked = server.ping_enabled || false;
+                const pingEnabledElement = document.getElementById('editPingEnabled');
+                if (pingEnabledElement) {
+                    pingEnabledElement.checked = server.ping_enabled || false;
+                }
 
                 // 認証方法を設定
                 const authMethodSelect = document.getElementById('editAuthMethod');
@@ -181,22 +274,24 @@ document.addEventListener('DOMContentLoaded', function() {
                 const sshUsernameInput = document.getElementById('editServerUsernameSsh');
                 const passwordInput = document.getElementById('editServerPassword');
 
-                // サーバーデータに基づいて認証方法を設定
-                const authMethod = server.auth_method || (server.ssh_key_id ? 'ssh_key' : 'password');
-                authMethodSelect.value = authMethod;
-                
-                usernameInput.value = server.username || '';
-                sshUsernameInput.value = server.username || '';
-                passwordInput.value = server.password || '';
+                if (authMethodSelect) {
+                    // サーバーデータに基づいて認証方法を設定
+                    const authMethod = server.auth_method || (server.ssh_key_id ? 'ssh_key' : 'password');
+                    authMethodSelect.value = authMethod;
+                    
+                    if (usernameInput) usernameInput.value = server.username || '';
+                    if (sshUsernameInput) sshUsernameInput.value = server.username || '';
+                    if (passwordInput) passwordInput.value = server.password || '';
 
-                // SSHキーのリストをロードし、サーバーのキーを選択
-                loadSshKeysForEditModal(server.ssh_key_id);
+                    // SSHキーのリストをロードし、サーバーのキーを選択
+                    loadSshKeysForEditModal(server.ssh_key_id);
 
-                // 初期表示を正しく設定
-                toggleAuthFields(authMethod);
+                    // 初期表示を正しく設定
+                    toggleAuthFields(authMethod);
 
-                // 認証方法の変更イベントリスナーを設定
-                authMethodSelect.onchange = () => toggleAuthFields(authMethodSelect.value);
+                    // 認証方法の変更イベントリスナーを設定
+                    authMethodSelect.onchange = () => toggleAuthFields(authMethodSelect.value);
+                }
 
                 editModal.show();
             })
@@ -224,7 +319,9 @@ document.addEventListener('DOMContentLoaded', function() {
             })
             .then(data => {
                 alert('サーバーが削除されました！');
-                loadServersForConfigModal(); // サーバーリストを再ロード
+                // 両方のビューを更新
+                loadServersForConfigModal(); // 設定モーダル内のサーバーリストを再ロード
+                updateMainPageServerCards(); // メインページのサーバーカードを更新
             })
             .catch(error => {
                 console.error('Error deleting server:', error);
@@ -235,36 +332,19 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function handleSetupButtonClick() {
         const serverId = this.dataset.id;
-        fetch(`/api/servers/${serverId}`)
-            .then(response => {
-                if (!response.ok) {
-                    return response.json().then(err => { throw err; });
-                }
-                return response.json();
-            })
-            .then(server => {
-                if (server) {
-                    document.getElementById('editServerId').value = server.id;
-                    document.getElementById('editServerName').value = server.name;
-                    document.getElementById('editServerHost').value = server.host;
-                    document.getElementById('editServerPort').value = server.port;
-                    document.getElementById('editServerType').value = server.type;
-                    document.getElementById('editServerUrl').value = server.url || '';
-                    document.getElementById('editServerDescription').value = server.description || '';
-                    document.getElementById('editServerTags').value = server.tags ? server.tags.join(', ') : '';
-                    document.getElementById('editServerUsername').value = server.username || '';
-                    document.getElementById('editServerPassword').value = server.password || '';
-                    document.getElementById('editServerSshKeyPath').value = server.ssh_key_path || '';
-                    document.getElementById('editServerSshKeyPassphrase').value = server.ssh_key_passphrase || '';
-
-                    const editModal = new bootstrap.Modal(document.getElementById('editServerModal'));
-                    editModal.show();
-                }
-            })
-            .catch(error => {
-                console.error('Error fetching server data for setup:', error);
-                alert('サーバーデータの取得に失敗しました: ' + (error.message || JSON.stringify(error)));
-            });
+        
+        // 設定モーダル内からクリックされた場合、設定モーダルを閉じる
+        const configModal = bootstrap.Modal.getInstance(document.getElementById('configModal'));
+        if (configModal) {
+            configModal.hide();
+            // モーダルが完全に閉じられてから編集モーダルを開く
+            setTimeout(() => {
+                openEditModalForServer(serverId);
+            }, 300); // Bootstrap のアニメーション時間を考慮
+        } else {
+            // メインページから直接呼ばれた場合
+            openEditModalForServer(serverId);
+        }
     }
 
     function handleConfirmDeleteClick() {
@@ -323,6 +403,11 @@ document.addEventListener('DOMContentLoaded', function() {
         const sshKeysTab = document.getElementById('ssh-keys-tab');
         if (sshKeysTab) {
             sshKeysTab.addEventListener('show.bs.tab', initializeSshKeyManagementScripts, { once: true });
+        }
+
+        const extraImportTab = document.getElementById('extra-import-tab');
+        if (extraImportTab) {
+            extraImportTab.addEventListener('show.bs.tab', initializeExtraImportScripts, { once: true });
         }
 
         // 必要に応じて他のタブの初期化もここに追加
@@ -519,6 +604,122 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    // Extra Import設定画面のスクリプトを初期化する関数
+    function initializeExtraImportScripts() {
+        const extraImportForm = document.getElementById('extra-import-form');
+        const extraImportUrlInput = document.getElementById('extra-import-url');
+
+        // 現在のExtra Import URLをロードして表示
+        function loadExtraImportUrl() {
+            fetch('/api/config/extra_import_url')
+                .then(response => {
+                    if (!response.ok) {
+                        // 404 Not Found の場合はURLが設定されていないと判断
+                        if (response.status === 404) {
+                            return { url: '' };
+                        }
+                        return response.json().then(err => { throw err; });
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (extraImportUrlInput) {
+                        extraImportUrlInput.value = data.url || '';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading Extra Import URL:', error);
+                    // エラー時も入力フィールドをクリア
+                    if (extraImportUrlInput) {
+                        extraImportUrlInput.value = '';
+                    }
+                });
+        }
+
+        // フォーム送信処理
+        if (extraImportForm) {
+            extraImportForm.addEventListener('submit', function(e) {
+                e.preventDefault(); // デフォルトのフォーム送信を防ぐ
+
+                const url = extraImportUrlInput.value;
+
+                fetch('/api/config/extra_import_url', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ url: url })
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        return response.json().then(err => { throw err; });
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.confirmation_needed) {
+                        const extraImportConfirmModal = new bootstrap.Modal(document.getElementById('extraImportConfirmModal'));
+                        extraImportConfirmModal.show();
+                    } else {
+                        alert('Extra Import URLが保存されました！');
+                        // loadServersForConfigModal(); // Socket.IOイベントで更新されるため削除
+                    }
+                })
+                .catch(error => {
+                    console.error('Error saving Extra Import URL:', error);
+                    alert('Extra Import URLの保存に失敗しました: ' + (error.message || JSON.stringify(error)));
+                });
+            });
+        }
+
+        // Extra Import確認モーダルのボタンイベントリスナー
+        const extraImportConfirmModalElement = document.getElementById('extraImportConfirmModal');
+        if (extraImportConfirmModalElement) {
+            const extraImportConfirmDeleteBtn = document.getElementById('extraImportConfirmDeleteBtn');
+            const extraImportConfirmKeepBtn = document.getElementById('extraImportConfirmKeepBtn');
+            const extraImportConfirmCancelBtn = document.getElementById('extraImportConfirmCancelBtn');
+
+            const confirmExtraImportAction = (action) => {
+                fetch('/api/extra_import_url/confirm', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: action })
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        return response.json().then(err => { throw err; });
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    alert(data.message);
+                    const modalInstance = bootstrap.Modal.getInstance(extraImportConfirmModalElement);
+                    if (modalInstance) modalInstance.hide();
+                    // 両方のビューを更新
+                    loadServersForConfigModal(); // 設定モーダル内のサーバーリストを再ロード
+                    updateMainPageServerCards(); // メインページのサーバーカードを更新
+                })
+                .catch(error => {
+                    console.error('Error confirming Extra Import action:', error);
+                    alert('Extra Importアクションの確認に失敗しました: ' + (error.message || JSON.stringify(error)));
+                });
+            };
+
+            if (extraImportConfirmDeleteBtn) {
+                extraImportConfirmDeleteBtn.addEventListener('click', () => confirmExtraImportAction('delete_all'));
+            }
+            if (extraImportConfirmKeepBtn) {
+                extraImportConfirmKeepBtn.addEventListener('click', () => confirmExtraImportAction('keep_all'));
+            }
+            if (extraImportConfirmCancelBtn) {
+                extraImportConfirmCancelBtn.addEventListener('click', () => confirmExtraImportAction('cancel'));
+            }
+        }
+
+        // Extra Importタブが表示されたときにURLをロード
+        loadExtraImportUrl();
+    }
+
     // SSHキー管理モーダル用の関数群
     function loadSshKeysForManagementModal() {
         fetch('/api/ssh_keys')
@@ -661,7 +862,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 servers.forEach(server => {
                     const serverCardHtml = `
                         <div class="col-md-4">
-                            <div class="card server-card config-server-card" data-server-id="${server.id}">
+                            <div class="card server-card config-server-card ${server.is_new ? 'border-success' : ''} ${server.is_deleted ? 'border-danger' : ''}" data-server-id="${server.id}">
                                 <div class="card-body server-card-body d-flex align-items-center">
                                     <div class="form-check config-checkbox-overlay">
                                         <input class="form-check-input config-server-checkbox" type="checkbox" value="" id="config-server-checkbox-${server.id}" data-server-id="${server.id}">
@@ -750,32 +951,238 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 
         // パネルクリックでチェックボックスをトグル（設定モーダル内）
-        document.querySelectorAll('.config-server-card .server-card-body').forEach(cardBody => {
+        document.querySelectorAll('.config-server-card').forEach(card => {
             // 既存のリスナーを削除（もしあれば）
-            cardBody.removeEventListener('click', function(event) {
-                if (event.target.classList.contains('config-server-checkbox')) {
-                    return;
-                }
-                const checkbox = this.querySelector('.config-server-checkbox');
-                if (checkbox) {
-                    checkbox.checked = !checkbox.checked;
-                    checkbox.dispatchEvent(new Event('change'));
-                }
-            });
+            card.removeEventListener('click', handleConfigServerCardClick);
             // 新しいリスナーを追加
-            cardBody.addEventListener('click', function(event) {
-                // チェックボックス自体がクリックされた場合は何もしない
-                if (event.target.classList.contains('config-server-checkbox')) {
-                    return;
-                }
-                const checkbox = this.querySelector('.config-server-checkbox');
+            card.addEventListener('click', handleConfigServerCardClick);
+        });
+
+        function handleConfigServerCardClick(event) {
+            const card = this;
+            const serverId = card.dataset.serverId;
+            const checkbox = card.querySelector('.config-server-checkbox');
+
+            // チェックボックス自体がクリックされた場合は何もしない
+            if (event.target.classList.contains('config-server-checkbox')) {
+                return;
+            }
+
+            // 編集ボタンまたは削除ボタンがクリックされた場合は何もしない
+            if (event.target.classList.contains('edit-server-btn') || event.target.classList.contains('delete-server-btn')) {
+                return;
+            }
+
+            // is_new または is_deleted のカードがクリックされた場合の特殊処理
+            if (card.classList.contains('border-success')) {
+                // 緑枠のカード（is_new）がクリックされた場合、編集モーダルを開く
+                fetch(`/api/servers/${serverId}`)
+                    .then(response => response.ok ? response.json() : Promise.reject(response))
+                    .then(server => {
+                        const editModalElement = document.getElementById('editServerModal');
+                        if (!editModalElement) {
+                            console.error('editServerModal element not found');
+                            alert('編集モーダルが見つかりません。ページを再読み込みしてください。');
+                            return;
+                        }
+                        const editModal = new bootstrap.Modal(editModalElement);
+
+                        // モーダルが表示される直前にフィールドを設定
+                        const editServerIdElement = document.getElementById('editServerId');
+                        if (!editServerIdElement) {
+                            console.error('editServerId element not found');
+                            alert('編集フォームの要素が見つかりません。ページを再読み込みしてください。');
+                            return;
+                        }
+                        editServerIdElement.value = server.id;
+                        editServerIdElement.value = server.id;
+                        
+                        const editServerNameElement = document.getElementById('editServerName');
+                        const editServerHostElement = document.getElementById('editServerHost');
+                        const editServerPortElement = document.getElementById('editServerPort');
+                        const editServerTypeElement = document.getElementById('editServerType');
+                        const editServerUrlElement = document.getElementById('editServerUrl');
+                        const editServerDescriptionElement = document.getElementById('editServerDescription');
+                        const editServerTagsElement = document.getElementById('editServerTags');
+                        const editPingEnabledElement = document.getElementById('editPingEnabled');
+                        
+                        if (!editServerNameElement || !editServerHostElement || !editServerPortElement || 
+                            !editServerTypeElement || !editPingEnabledElement) {
+                            console.error('Required form elements not found');
+                            alert('編集フォームの必要な要素が見つかりません。ページを再読み込みしてください。');
+                            return;
+                        }
+                        
+                        editServerNameElement.value = server.name;
+                        editServerHostElement.value = server.host || '';
+                        editServerPortElement.value = server.port || '22';
+                        editServerTypeElement.value = server.type;
+                        if (editServerUrlElement) editServerUrlElement.value = server.url || '';
+                        if (editServerDescriptionElement) editServerDescriptionElement.value = server.description || '';
+                        if (editServerTagsElement) editServerTagsElement.value = server.tags ? server.tags.join(', ') : '';
+                        editPingEnabledElement.checked = server.ping_enabled || false;
+
+                        const authMethodSelect = document.getElementById('editAuthMethod');
+                        const usernameInput = document.getElementById('editServerUsername');
+                        const sshUsernameInput = document.getElementById('editServerUsernameSsh');
+                        const passwordInput = document.getElementById('editServerPassword');
+
+                        if (!authMethodSelect || !usernameInput || !sshUsernameInput || !passwordInput) {
+                            console.error('Authentication form elements not found');
+                            alert('認証設定の要素が見つかりません。ページを再読み込みしてください。');
+                            return;
+                        }
+
+                        const authMethod = server.auth_method || (server.ssh_key_id ? 'ssh_key' : 'password');
+                        authMethodSelect.value = authMethod;
+                        
+                        usernameInput.value = server.username || '';
+                        sshUsernameInput.value = server.username || '';
+                        passwordInput.value = server.password || '';
+
+                        loadSshKeysForEditModal(server.ssh_key_id);
+                        toggleAuthFields(authMethod);
+                        authMethodSelect.onchange = () => toggleAuthFields(authMethodSelect.value);
+
+                        editModal.show();
+
+                        // 編集モーダルの「保存」ボタンが押されたときにis_newフラグを削除する処理を追加
+                        const editServerForm = document.getElementById('editServerForm');
+                        if (!editServerForm) {
+                            console.error('editServerForm element not found');
+                            alert('編集フォームが見つかりません。ページを再読み込みしてください。');
+                            return;
+                        }
+                        const originalEditSubmitHandler = editServerForm.onsubmit; // 元のハンドラを保存
+                        editServerForm.onsubmit = function(e) {
+                            e.preventDefault();
+                            const currentServerId = document.getElementById('editServerId').value;
+                            const currentAuthMethod = document.getElementById('editAuthMethod').value;
+                            
+                            const formData = new FormData(editServerForm);
+                            const payload = Object.fromEntries(formData.entries());
+
+                            payload.ping_enabled = document.getElementById('editPingEnabled').checked;
+
+                            if (currentAuthMethod === 'ssh_key') {
+                                payload.username = payload.username_ssh;
+                                delete payload.username_ssh;
+                                delete payload.password;
+                            } else {
+                                delete payload.username_ssh;
+                                delete payload.ssh_key_id;
+                            }
+
+                            // is_new フラグを明示的に削除
+                            payload.is_new = false;
+
+                            fetch(`/api/servers/${currentServerId}`, {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(payload)
+                            })
+                            .then(response => response.ok ? response.json() : Promise.reject('サーバー情報の更新に失敗しました。'))
+                            .then(() => {
+                                alert('サーバー情報が更新されました！');
+                                const editModal = bootstrap.Modal.getInstance(document.getElementById('editServerModal'));
+                                if (editModal) {
+                                    editModal.hide();
+                                }
+                                // 両方のビューを更新
+                                loadServersForConfigModal(); // 設定モーダル内のサーバーリストを再ロード
+                                updateMainPageServerCards(); // メインページのサーバーカードを更新
+                            })
+                            .catch(error => {
+                                console.error('Error updating server:', error);
+                                alert(error);
+                            });
+                            editServerForm.onsubmit = originalEditSubmitHandler; // 元のハンドラに戻す
+                        };
+                    })
+                    .catch(error => {
+                        console.error('Error fetching server data:', error);
+                        alert('サーバーデータの取得に失敗しました。');
+                    });
+            } else if (card.classList.contains('border-danger')) {
+                // 赤枠のカード（is_deleted）がクリックされた場合、確認ダイアログを表示
+                const confirmDeleteModal = new bootstrap.Modal(document.getElementById('extraImportConfirmModal'));
+                const modalBody = document.querySelector('#extraImportConfirmModal .modal-body');
+                modalBody.innerHTML = `<p>このサーバー (<strong>${card.querySelector('.server-card-title').textContent}</strong>) はExtra Importから削除されました。どうしますか？</p>
+                                       <p><strong>削除:</strong> このサーバーを完全に削除します。</p>
+                                       <p><strong>維持:</strong> このサーバーを通常のサーバーとして維持し、Extra Importの管理対象から外します。</p>`;
+                
+                const extraImportConfirmDeleteBtn = document.getElementById('extraImportConfirmDeleteBtn');
+                const extraImportConfirmKeepBtn = document.getElementById('extraImportConfirmKeepBtn');
+                const extraImportConfirmCancelBtn = document.getElementById('extraImportConfirmCancelBtn');
+
+                // イベントリスナーを一時的に削除して再設定
+                const tempDeleteHandler = () => {
+                    fetch('/api/extra_import_url/confirm', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'delete_single', server_id: serverId })
+                    })
+                    .then(response => response.ok ? response.json() : response.json().then(err => { throw err; }))
+                    .then(data => {
+                        alert(data.message);
+                        confirmDeleteModal.hide();
+                        // 両方のビューを更新
+                        loadServersForConfigModal();
+                        updateMainPageServerCards();
+                    })
+                    .catch(error => {
+                        console.error('Error deleting single server from extra import:', error);
+                        alert('サーバーの削除に失敗しました: ' + (error.message || JSON.stringify(error)));
+                    });
+                    extraImportConfirmDeleteBtn.removeEventListener('click', tempDeleteHandler);
+                    extraImportConfirmKeepBtn.removeEventListener('click', tempKeepHandler);
+                    extraImportConfirmCancelBtn.removeEventListener('click', tempCancelHandler);
+                };
+
+                const tempKeepHandler = () => {
+                    fetch('/api/extra_import_url/confirm', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'keep_single', server_id: serverId })
+                    })
+                    .then(response => response.ok ? response.json() : response.json().then(err => { throw err; }))
+                    .then(data => {
+                        alert(data.message);
+                        confirmDeleteModal.hide();
+                        // 両方のビューを更新
+                        loadServersForConfigModal();
+                        updateMainPageServerCards();
+                    })
+                    .catch(error => {
+                        console.error('Error keeping single server from extra import:', error);
+                        alert('サーバーの維持に失敗しました: ' + (error.message || JSON.stringify(error)));
+                    });
+                    extraImportConfirmDeleteBtn.removeEventListener('click', tempDeleteHandler);
+                    extraImportConfirmKeepBtn.removeEventListener('click', tempKeepHandler);
+                    extraImportConfirmCancelBtn.removeEventListener('click', tempCancelHandler);
+                };
+
+                const tempCancelHandler = () => {
+                    confirmDeleteModal.hide();
+                    extraImportConfirmDeleteBtn.removeEventListener('click', tempDeleteHandler);
+                    extraImportConfirmKeepBtn.removeEventListener('click', tempKeepHandler);
+                    extraImportConfirmCancelBtn.removeEventListener('click', tempCancelHandler);
+                };
+
+                extraImportConfirmDeleteBtn.addEventListener('click', tempDeleteHandler);
+                extraImportConfirmKeepBtn.addEventListener('click', tempKeepHandler);
+                extraImportConfirmCancelBtn.addEventListener('click', tempCancelHandler);
+
+                confirmDeleteModal.show();
+
+            } else {
+                // 通常のカードクリックではチェックボックスをトグル
                 if (checkbox) {
                     checkbox.checked = !checkbox.checked;
-                    // 手動でchangeイベントを発火させて、selectedクラスのトグルとボタンの表示更新を行う
                     checkbox.dispatchEvent(new Event('change'));
                 }
-            });
-        });
+            }
+        }
 
         // 一括削除ボタンのイベントリスナー
         if (bulkDeleteServersBtn) {
@@ -800,7 +1207,9 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(response => response.ok ? response.json() : response.json().then(err => { throw err; }))
             .then(() => {
                 alert('選択されたサーバーが削除されました！');
-                loadServersForConfigModal(); // サーバーリストを再ロード
+                // 両方のビューを更新
+                loadServersForConfigModal(); // 設定モーダル内のサーバーリストを再ロード
+                updateMainPageServerCards(); // メインページのサーバーカードを更新
             })
             .catch(error => console.error('Error during bulk delete of servers:', error));
         }
@@ -841,7 +1250,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (editModal) {
                     editModal.hide();
                 }
-                loadServersForConfigModal(); // サーバーリストを再ロードして変更を反映
+                // 両方のビューを更新
+                loadServersForConfigModal(); // 設定モーダル内のサーバーリストを再ロード
+                updateMainPageServerCards(); // メインページのサーバーカードを更新
             })
             .catch(error => {
                 console.error('Error updating server:', error);

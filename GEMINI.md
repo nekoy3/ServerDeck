@@ -70,20 +70,20 @@ python3 -m pip install -r requirements.txt
 
 1.  **変更のステージング**: 作業ディレクトリでの変更をステージングエリアに追加します。
     ```bash
-    git add <ファイル名> # 特定のファイルを追加
-    git add .           # すべての変更を追加
+git add <ファイル名> # 特定のファイルを追加
+git add .           # すべての変更を追加
     ```
 
 2.  **変更のコミット**: ステージングされた変更をコミットします。コミットメッセージは、変更内容を簡潔かつ明確に記述してください。
     ```bash
-    git commit -m "feat: 新機能の追加" # 新機能
-    git commit -m "fix: バグ修正"     # バグ修正
-    git commit -m "docs: ドキュメント更新" # ドキュメント更新
+git commit -m "feat: 新機能の追加" # 新機能
+git commit -m "fix: バグ修正"     # バグ修正
+git commit -m "docs: ドキュメント更新" # ドキュメント更新
     ```
 
 3.  **変更のプッシュ**: コミットした変更をリモートリポジトリの`main`ブランチにプッシュします。
     ```bash
-    git push origin main
+git push origin main
     ```
 
 ### 最新の変更の取得
@@ -100,12 +100,12 @@ git pull origin main
 
 1.  **新しいブランチの作成と切り替え**: 
     ```bash
-    git checkout -b feature/your-feature-name
+git checkout -b feature/your-feature-name
     ```
 
 2.  **ブランチの切り替え**: 
     ```bash
-    git checkout main
+git checkout main
     ```
 
 ### リモートブランチの追跡設定の解除
@@ -139,9 +139,9 @@ SSH秘密鍵をDockerイメージに直接含めることは、セキュリテ�
     コンテナを起動する際に、`-v`オプションを使用してホストの秘密鍵ディレクトリをコンテナ内にマウントします。
 
     ```bash
-    docker run -d -p 5001:5001 \
-      -v /Users/nekoy/.ssh:/root/.ssh:ro \
-      --name serverdeck-container serverdeck-app
+docker run -d -p 5001:5001 \
+  -v /Users/nekoy/.ssh:/root/.ssh:ro \
+  --name serverdeck-container serverdeck-app
     ```
     *   `/Users/nekoy/.ssh`: ホストマシン上のSSH秘密鍵が保存されているディレクトリの絶対パス。
     *   `/root/.ssh`: コンテナ内部でSSH秘密鍵がマウントされるパス。`paramiko`がデフォルトで`~/.ssh`を探すため、このパスが推奨されます。
@@ -156,21 +156,20 @@ SSH秘密鍵をDockerイメージに直接含めることは、セキュリテ�
 
 1.  **プロジェクトディレクトリへ移動:**
     ```bash
-    cd ServerDeck
+cd ServerDeck
     ```
 
 2.  **Dockerイメージのビルド:**
     ```bash
-    docker build -t serverdeck-app .
+docker build -t serverdeck-app .
     ```
-    このコマンドは、現在のディレクトリにある`Dockerfile`に基づいて`serverdeck-app`という名前のDockerイメージをビルドします。
 
 3.  **Dockerコンテナの実行:**
     ```bash
-    docker run -d -p 5001:5001 \
-      -v /path/to/your/ServerDeck/config:/app/config \
-      -v /path/to/your/ServerDeck/uploaded_ssh_keys:/app/config/uploaded_ssh_keys \
-      --name serverdeck-container serverdeck-app
+docker run -d -p 5001:5001 \
+  -v /path/to/your/ServerDeck/config:/app/config \
+  -v /path/to/your/ServerDeck/uploaded_ssh_keys:/app/config/uploaded_ssh_keys \
+  --name serverdeck-container serverdeck-app
     ```
     このコマンドは、`serverdeck-app`イメージをデタッチモード(`-d`)で実行し、ホストのポート5001をコンテナのポート5001にマッピング(`-p 5001:5001`)し、ホストの`config`ディレクトリと`uploaded_ssh_keys`ディレクトリをコンテナにマウントします。コンテナに`serverdeck-container`という名前を付けます。
 
@@ -178,12 +177,12 @@ SSH秘密鍵をDockerイメージに直接含めることは、セキュリテ�
 
 4.  **Dockerコンテナの停止 (完了時):**
     ```bash
-    docker stop serverdeck-container
+docker stop serverdeck-container
     ```
 
 5.  **Dockerコンテナの削除 (不要になった場合):**
     ```bash
-    docker rm serverdeck-container
+docker rm serverdeck-container
     ```
 
 ## Dockerコンテナの再起動スクリプト
@@ -227,12 +226,12 @@ echo "ServerDeck application restarted. Access at http://127.0.0.1:5001/"
 1.  上記のコードをそれぞれ`restart_full.sh`と`restart_app.sh`という名前で`ServerDeck`ディレクトリに保存します。
 2.  実行権限を付与します。
     ```bash
-    chmod +x restart_full.sh restart_app.sh
+chmod +x restart_full.sh restart_app.sh
     ```
 3.  スクリプトを実行します。
     ```bash
-    ./restart_full.sh
-    ./restart_app.sh
+./restart_full.sh
+./restart_app.sh
     ```
 
 ## エージェントとのインタラクションガイドライン
@@ -241,7 +240,7 @@ echo "ServerDeck application restarted. Access at http://127.0.0.1:5001/"
 
 ### エージェントのトーンとスタイル
 
-エージェントは、より感情的でフランクな話し言葉を使用し、堅苦しい表現を避けてください。ユーザーとの対話では、親しみやすく、人間らしいトーンを心がけます。
+エージェントは、より感情的でフランクな話し言葉を使用し、堅苦しい表現を避け、ユーザーとの対話では、親しみやすく、人間らしいトーンを心がけます。
 
 ## 最近の変更
 
@@ -267,7 +266,7 @@ echo "ServerDeck application restarted. Access at http://127.0.0.1:5001/"
 1.  **ターミナルで`ServerDeck`ディレクトリに移動します。**
 2.  **以下のコマンドを実行します。**
     ```bash
-    python3 user_management.py adduser
+python3 user_management.py adduser
     ```
 3.  **対話形式でユーザー名とパスワードを設定します。**
 
