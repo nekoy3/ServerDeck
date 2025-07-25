@@ -24,6 +24,9 @@ app.config['SECRET_KEY'] = os.urandom(24)
 app.config["SESSION_TYPE"] = "filesystem"
 app.config["SESSION_FILE_DIR"] = os.path.join(os.path.dirname(__file__), 'config', 'flask_session')
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=1)
+app.config["SESSION_COOKIE_SECURE"] = False  # HTTPでも動作するように
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 Session(app)
 
 socketio = SocketIO(app)
@@ -320,20 +323,27 @@ def login_required(f):
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if 'username' in session:
+        app.logger.debug(f"User {session['username']} already logged in, redirecting to index")
         return redirect(url_for('index'))
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
+        app.logger.debug(f"Login attempt for username: {username}")
         
         users_config = load_users_config()
         user = next((u for u in users_config.get('users', []) if u['username'] == username), None)
         
         if user and check_password_hash(user['password_hash'], password):
             session['username'] = user['username']
+            session.permanent = True
+            app.logger.debug(f"Login successful for user: {username}")
             flash('Logged in successfully.', 'success')
             next_page = request.args.get('next')
-            return redirect(next_page or url_for('index'))
+            redirect_url = next_page or url_for('index')
+            app.logger.debug(f"Redirecting to: {redirect_url}")
+            return redirect(redirect_url)
         else:
+            app.logger.debug(f"Login failed for username: {username}")
             flash('Invalid username or password.', 'danger')
             
     return render_template('login.html')
@@ -346,6 +356,100 @@ def logout():
 
 
 # --- Protected Routes ---
+
+@app.route('/test.html')
+def test_page():
+    """テスト用のシンプルなHTMLページを配信"""
+    return '''<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>テストページ</title>
+</head>
+<body>
+    <h1>こんにちは</h1>
+    <p>このページはテスト用です。</p>
+    <p>「le=1.0>」の表示が消えているかを確認してください。</p>
+    <script>console.log('Test page loaded successfully');</script>
+</body>
+</html>'''
+
+@app.route('/debug')
+def debug_page():
+    """デバッグ情報を表示するページ"""
+    return f'''<!DOCTYPE html>
+<html>
+<head><title>Debug Info</title></head>
+<body>
+    <h1>Debug Information</h1>
+    <p>Current time: {datetime.now()}</p>
+    <p>Session: {'logged in' if 'username' in session else 'not logged in'}</p>
+    <p>Flask version: Working</p>
+</body>
+</html>'''
+
+@app.route('/modal-test')
+@login_required
+def modal_test():
+    """モーダルテスト用のシンプルなページ"""
+    return '''<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>モーダルテスト</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container mt-4">
+        <h1>モーダルテスト</h1>
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#testModal">
+            モーダルを開く
+        </button>
+        
+        <!-- Modal -->
+        <div class="modal fade" id="testModal" tabindex="-1" aria-labelledby="testModalLabel" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="testModalLabel">テストモーダル</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p>これはテスト用のモーダルです。</p>
+                        <p>正常に開閉できるかテストしています。</p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
+                        <button type="button" class="btn btn-primary">保存</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        console.log('Modal test page loaded');
+        
+        // モーダルイベントの監視
+        const modal = document.getElementById('testModal');
+        modal.addEventListener('show.bs.modal', function() {
+            console.log('Modal is showing');
+        });
+        modal.addEventListener('shown.bs.modal', function() {
+            console.log('Modal is shown');
+        });
+        modal.addEventListener('hide.bs.modal', function() {
+            console.log('Modal is hiding');
+        });
+        modal.addEventListener('hidden.bs.modal', function() {
+            console.log('Modal is hidden');
+        });
+    </script>
+</body>
+</html>'''
 
 @app.route('/')
 @login_required
