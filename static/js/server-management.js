@@ -65,62 +65,72 @@ window.ServerManagement = {
                     return;
                 }
 
+                // DOM要素が完全に読み込まれているか確認
+                const modalBody = editModalElement.querySelector('.modal-body');
+                if (!modalBody) {
+                    console.error('🚨 [EDIT] Modal body not found, waiting for DOM...');
+                    setTimeout(() => this.openEditModal(serverId, fromConfigModal), 100);
+                    return;
+                }
+
                 // 既存のモーダルをクリーンアップ
                 ServerDeckUtils.modalManager.cleanupModal(editModalElement);
 
                 // サーバーデータをフォームに設定
                 this.populateEditModal(server);
 
-                // モーダルを開く
-                const modalInstance = ServerDeckUtils.modalManager.openModal(editModalElement);
-                
-                if (modalInstance) {
-                    // 隠れた時の処理を設定
-                    const handleHidden = () => {
-                        console.log('🔧 [EDIT] Edit modal hidden');
-                        ServerDeckUtils.modalManager.cleanupModal(editModalElement);
-                        
-                        // 設定モーダルから開いた場合のみ設定モーダルを再度開く
-                        if (fromConfigModal && !editModalElement.dataset.savedSuccessfully) {
-                            console.log('🔧 [EDIT] Reopening config modal after edit modal close');
-                            setTimeout(() => {
-                                ServerDeckUtils.openConfigModal();
-                            }, 100);
-                        }
-                        
-                        // フラグをリセット
-                        delete editModalElement.dataset.savedSuccessfully;
-                    };
+                // モーダルを開く（遅延を追加してDOM準備を確実にする）
+                setTimeout(() => {
+                    const modalInstance = ServerDeckUtils.modalManager.openModal(editModalElement);
                     
-                    editModalElement.addEventListener('hidden.bs.modal', handleHidden, { once: true });
-                } else {
-                    // モーダルインスタンス作成に失敗した場合の代替処理
-                    console.warn('🔧 [EDIT] Failed to create modal instance, using fallback');
-                    
-                    // 直接Bootstrapモーダルを作成してみる
-                    setTimeout(() => {
-                        try {
-                            const fallbackModal = new bootstrap.Modal(editModalElement, {
-                                backdrop: 'static',
-                                keyboard: true,
-                                focus: true
-                            });
-                            fallbackModal.show();
+                    if (modalInstance) {
+                        // 隠れた時の処理を設定
+                        const handleHidden = () => {
+                            console.log('🔧 [EDIT] Edit modal hidden');
+                            ServerDeckUtils.modalManager.cleanupModal(editModalElement);
                             
-                            editModalElement.addEventListener('hidden.bs.modal', () => {
-                                console.log('🔧 [EDIT] Fallback edit modal hidden');
-                                if (fromConfigModal && !editModalElement.dataset.savedSuccessfully) {
-                                    setTimeout(() => {
-                                        ServerDeckUtils.openConfigModal();
-                                    }, 100);
-                                }
-                                delete editModalElement.dataset.savedSuccessfully;
-                            }, { once: true });
-                        } catch (fallbackError) {
-                            console.error('🔧 [EDIT] Fallback modal creation also failed:', fallbackError);
-                        }
-                    }, 100);
-                }
+                            // 設定モーダルから開いた場合のみ設定モーダルを再度開く
+                            if (fromConfigModal && !editModalElement.dataset.savedSuccessfully) {
+                                console.log('🔧 [EDIT] Reopening config modal after edit modal close');
+                                setTimeout(() => {
+                                    ServerDeckUtils.openConfigModal();
+                                }, 100);
+                            }
+                            
+                            // フラグをリセット
+                            delete editModalElement.dataset.savedSuccessfully;
+                        };
+                        
+                        editModalElement.addEventListener('hidden.bs.modal', handleHidden, { once: true });
+                    } else {
+                        // モーダルインスタンス作成に失敗した場合の代替処理
+                        console.warn('🔧 [EDIT] Failed to create modal instance, using fallback');
+                        
+                        // 直接Bootstrapモーダルを作成してみる
+                        setTimeout(() => {
+                            try {
+                                const fallbackModal = new bootstrap.Modal(editModalElement, {
+                                    backdrop: 'static',
+                                    keyboard: true,
+                                    focus: true
+                                });
+                                fallbackModal.show();
+                                
+                                editModalElement.addEventListener('hidden.bs.modal', () => {
+                                    console.log('🔧 [EDIT] Fallback edit modal hidden');
+                                    if (fromConfigModal && !editModalElement.dataset.savedSuccessfully) {
+                                        setTimeout(() => {
+                                            ServerDeckUtils.openConfigModal();
+                                        }, 100);
+                                    }
+                                    delete editModalElement.dataset.savedSuccessfully;
+                                }, { once: true });
+                            } catch (fallbackError) {
+                                console.error('🔧 [EDIT] Fallback modal creation also failed:', fallbackError);
+                            }
+                        }, 100);
+                    }
+                }, 50); // 50ms遅延でDOM準備を確実にする
             })
             .catch(error => {
                 console.error('❌ [EDIT] Error fetching server data:', error);
@@ -130,6 +140,8 @@ window.ServerManagement = {
 
     // 編集モーダルにサーバーデータを設定
     populateEditModal: function(server) {
+        console.log('🔧 [EDIT] Populating edit modal with server data:', server.name);
+        
         // 必要な要素の存在確認と値の設定
         const elements = {
             'editServerId': server.id,
@@ -142,13 +154,19 @@ window.ServerManagement = {
             'editServerTags': server.tags ? server.tags.join(', ') : ''
         };
 
+        let missingElements = [];
         for (const [elementId, value] of Object.entries(elements)) {
             const element = document.getElementById(elementId);
             if (element) {
                 element.value = value;
             } else {
-                console.warn(`Element with id ${elementId} not found`);
+                console.warn(`❌ [EDIT] Element with id ${elementId} not found`);
+                missingElements.push(elementId);
             }
+        }
+        
+        if (missingElements.length > 0) {
+            console.error('🚨 [EDIT] Missing form elements:', missingElements);
         }
         
         // Ping監視設定

@@ -35,6 +35,20 @@ window.ServerDeckUtils = {
             const modalOptions = { ...defaultOptions, ...options };
             
             try {
+                // モーダル内の重要な要素が存在するかチェック
+                const modalDialog = modalElement.querySelector('.modal-dialog');
+                const modalContent = modalElement.querySelector('.modal-content');
+                const modalBody = modalElement.querySelector('.modal-body');
+                
+                if (!modalDialog || !modalContent || !modalBody) {
+                    console.error(`🚨 [MODAL] Modal ${modalId} structure is incomplete`, {
+                        hasDialog: !!modalDialog,
+                        hasContent: !!modalContent, 
+                        hasBody: !!modalBody
+                    });
+                    return null;
+                }
+                
                 const modalInstance = new bootstrap.Modal(modalElement, modalOptions);
                 
                 // アクティブなモーダルとして記録
@@ -45,6 +59,7 @@ window.ServerDeckUtils = {
                 return modalInstance;
             } catch (error) {
                 console.error(`❌ [MODAL] Error opening modal ${modalId}:`, error);
+                console.error('Modal element structure:', modalElement.innerHTML.substring(0, 200) + '...');
                 this.activeModals.delete(modalId);
                 return null;
             }
