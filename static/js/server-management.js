@@ -454,34 +454,22 @@ window.ServerManagement = {
             return;
         }
 
-        // 編集ボタンまたは削除ボタンがクリックされた場合は何もしない
-        if (event.target.classList.contains('edit-server-btn') || event.target.classList.contains('delete-server-btn')) {
+        // 任意のボタンがクリックされた場合は何もしない（各ボタンが独自のハンドラーで処理）
+        if (event.target.tagName === 'BUTTON' || event.target.closest('button')) {
+            console.log('🔧 [CARD] Button clicked, handled by specific button handler');
             return;
         }
 
-        // セットアップボタンがクリックされた場合は何もしない（handleSetupButtonClickで処理される）
-        if (event.target.classList.contains('btn-outline-primary') && event.target.textContent.includes('セットアップ')) {
+        // リンク（<a>タグ）がクリックされた場合は何もしない
+        if (event.target.tagName === 'A' || event.target.closest('a')) {
+            console.log('🔧 [CARD] Link clicked, allowing default behavior');
             return;
         }
 
-        // 確認・削除ボタンがクリックされた場合は何もしない
-        if (event.target.classList.contains('btn-success') || event.target.classList.contains('btn-danger')) {
-            return;
-        }
-
-        // is_new または is_deleted のカードがクリックされた場合の特殊処理
-        if (card.classList.contains('border-success')) {
-            // 緑枠のカード（is_new）がクリックされた場合、編集モーダルを開く
-            console.log('🔧 [CARD] Opening edit modal for new server');
-            this.openEditModal(serverId, true); // 設定モーダル内なので true
-        } else if (card.classList.contains('border-danger')) {
-            // 赤枠のカード（is_deleted）がクリックされた場合、確認ダイアログを表示
-            ExtraImport.showDeleteConfirmation(serverId, card.querySelector('.server-card-title').textContent);
-        } else {
-            // 通常のカードクリック: 何もしない（編集ボタンと統一）
-            console.log('🔧 [CARD] Server card clicked, no action taken');
-            return;
-        }
+        // 🔧 設定パネルでのカードクリックは何もしない
+        // 編集は編集ボタンからのみ行う（UI統一）
+        console.log('🔧 [CARD] Config panel server card clicked, no action taken (use edit button)');
+        return;
     },
 
     // サーバー編集フォームの初期化
