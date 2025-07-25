@@ -64,7 +64,11 @@ window.ServerManagement = {
                 }
                 const editModal = new bootstrap.Modal(editModalElement);
 
+                // 保存成功フラグをリセット
+                editModalElement.dataset.savedSuccessfully = 'false';
+
                 this.populateEditModal(server);
+                this.initializeEditModalCancelHandling();
                 editModal.show();
             })
             .catch(error => {
@@ -444,7 +448,16 @@ window.ServerManagement = {
                 .then(() => {
                     alert('サーバー情報が更新されました！');
                     const editModal = bootstrap.Modal.getInstance(document.getElementById('editServerModal'));
-                    if (editModal) editModal.hide();
+                    const editModalElement = document.getElementById('editServerModal');
+                    if (editModal && editModalElement) {
+                        // 保存成功フラグを設定
+                        editModalElement.dataset.savedSuccessfully = 'true';
+                        editModal.hide();
+                        // 編集モーダルが完全に閉じた後、設定パネルを再度開く
+                        editModalElement.addEventListener('hidden.bs.modal', () => {
+                            this.reopenConfigModal();
+                        }, { once: true });
+                    }
                     this.loadServersForConfigModal();
                     this.updateMainPageServerCards();
                 })
@@ -452,6 +465,39 @@ window.ServerManagement = {
                     console.error('Error updating server:', error);
                     alert(error);
                 });
+            });
+        }
+    },
+
+    // 編集モーダルを閉じた後に設定パネルを再度開く
+    reopenConfigModal: function() {
+        setTimeout(() => {
+            ServerDeckUtils.loadConfigModal();
+        }, 300);
+    },
+
+    // 編集モーダルのキャンセル処理を初期化
+    initializeEditModalCancelHandling: function() {
+        const editModal = document.getElementById('editServerModal');
+        if (editModal) {
+            // キャンセルボタンと×ボタンの処理
+            const cancelButtons = editModal.querySelectorAll('[data-bs-dismiss="modal"]');
+            cancelButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    editModal.addEventListener('hidden.bs.modal', () => {
+                        this.reopenConfigModal();
+                    }, { once: true });
+                });
+            });
+
+            // Escキーでの閉じる処理
+            editModal.addEventListener('hide.bs.modal', (event) => {
+                // 保存時以外の場合（キャンセル時）
+                if (event.target === editModal && !editModal.dataset.savedSuccessfully) {
+                    editModal.addEventListener('hidden.bs.modal', () => {
+                        this.reopenConfigModal();
+                    }, { once: true });
+                }
             });
         }
     }
