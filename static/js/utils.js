@@ -2,75 +2,180 @@
 window.ServerDeckUtils = {
     configModalInitialized: false,
     
+    // シンプルなモーダル管理システム
+    modalManager: {
+        activeModals: new Set(),
+        
+        // モーダルを安全に開く
+        openModal: function(modalElement, options = {}) {
+            if (!modalElement) {
+                console.error('🚨 [MODAL] Modal element not found');
+                return null;
+            }
+            
+            const modalId = modalElement.id;
+            console.log(`🚪 [MODAL] Opening modal: ${modalId}`);
+            
+            // 既存のインスタンスをクリーンアップ
+            this.cleanupModal(modalElement);
+            
+            // 新しいインスタンスを作成
+            const defaultOptions = {
+                backdrop: 'static',
+                keyboard: true,
+                focus: true
+            };
+            
+            const modalOptions = { ...defaultOptions, ...options };
+            const modalInstance = new bootstrap.Modal(modalElement, modalOptions);
+            
+            // アクティブなモーダルとして記録
+            this.activeModals.add(modalId);
+            
+            try {
+                modalInstance.show();
+                console.log(`✅ [MODAL] Modal ${modalId} opened successfully`);
+                return modalInstance;
+            } catch (error) {
+                console.error(`❌ [MODAL] Error opening modal ${modalId}:`, error);
+                this.activeModals.delete(modalId);
+                return null;
+            }
+        },
+        
+        // モーダルを安全に閉じる
+        closeModal: function(modalElement) {
+            if (!modalElement) return;
+            
+            const modalId = modalElement.id;
+            console.log(`🚪 [MODAL] Closing modal: ${modalId}`);
+            
+            const instance = bootstrap.Modal.getInstance(modalElement);
+            if (instance) {
+                try {
+                    instance.hide();
+                    console.log(`✅ [MODAL] Modal ${modalId} closed successfully`);
+                } catch (error) {
+                    console.error(`❌ [MODAL] Error closing modal ${modalId}:`, error);
+                }
+            }
+            
+            this.activeModals.delete(modalId);
+        },
+        
+        // モーダルのクリーンアップ
+        cleanupModal: function(modalElement) {
+            if (!modalElement) return;
+            
+            const modalId = modalElement.id;
+            const instance = bootstrap.Modal.getInstance(modalElement);
+            
+            if (instance) {
+                console.log(`🧹 [MODAL] Cleaning up existing instance for: ${modalId}`);
+                try {
+                    if (typeof instance.dispose === 'function') {
+                        instance.dispose();
+                    }
+                } catch (error) {
+                    console.warn(`⚠️  [MODAL] Error disposing modal ${modalId}:`, error);
+                }
+            }
+            
+            // DOM状態をリセット
+            modalElement.classList.remove('show');
+            modalElement.style.display = 'none';
+            modalElement.setAttribute('aria-hidden', 'true');
+            modalElement.removeAttribute('aria-modal');
+            
+            this.activeModals.delete(modalId);
+        },
+        
+        // 全モーダルを強制クリーンアップ
+        cleanupAllModals: function() {
+            console.log('🧹 [MODAL] Cleaning up all modals');
+            
+            // アクティブなモーダルをクリーンアップ
+            this.activeModals.forEach(modalId => {
+                const modalElement = document.getElementById(modalId);
+                if (modalElement) {
+                    this.cleanupModal(modalElement);
+                }
+            });
+            this.activeModals.clear();
+            
+            // 残留するバックドロップを削除
+            document.querySelectorAll('.modal-backdrop').forEach(backdrop => {
+                backdrop.remove();
+            });
+            
+            // body状態をリセット
+            document.body.classList.remove('modal-open');
+            document.body.style.overflow = '';
+            document.body.style.paddingRight = '';
+            document.body.style.marginRight = '';
+            
+            console.log('✅ [MODAL] All modals cleaned up');
+        }
+    },
+    
     // 設定モーダルの動的読み込み
     loadConfigModal: function() {
         const configLink = document.getElementById('configLink');
         const configModalBody = document.getElementById('configModalBody');
         const configModalElement = document.getElementById('configModal');
 
-        // 既存のモーダルバックドロップとクラスをクリーンアップ（安全策）
-        this.cleanupModalRemnants();
-
         if (configLink && configModalBody && configModalElement) {
-            configLink.addEventListener('click', function(e) {
+            configLink.addEventListener('click', (e) => {
                 e.preventDefault();
-                
-                // クリックする前にクリーンアップ
-                ServerDeckUtils.cleanupModalRemnants();
-                
-                fetch('/config')
-                    .then(response => response.text())
-                    .then(html => {
-                        // モーダル表示前に内容をクリア
-                        configModalBody.innerHTML = '';
-                        // 少し遅延させてからHTMLを設定（メモリリークを防止）
-                        setTimeout(() => {
-                            configModalBody.innerHTML = html;
-                            
-                            // モーダル閉じるイベントハンドラを先に設定
-                            const handleModalHidden = function(event) {
-                                console.log('🚪 [MODAL] Modal hidden event triggered:', event);
-                                console.log('🚪 [MODAL] Starting cleanup after modal hidden');
-                                // 遅延させてクリーンアップを実行
-                                setTimeout(() => {
-                                    console.log('🚪 [MODAL] Executing delayed cleanup');
-                                    ServerDeckUtils.cleanupModalRemnants();
-                                }, 150);
-                            };
-                            
-                            // 既存のイベントリスナーを削除
-                            console.log('🚪 [MODAL] Setting up modal event handlers');
-                            configModalElement.removeEventListener('hidden.bs.modal', handleModalHidden);
-                            configModalElement.addEventListener('hidden.bs.modal', handleModalHidden, { once: true });
-                            
-                            // モーダルを表示
-                            console.log('🚪 [MODAL] Creating Bootstrap modal instance');
-                            const configModal = new bootstrap.Modal(configModalElement, {
-                                backdrop: 'static', // 背景クリックで閉じないように
-                                keyboard: true,
-                                focus: true
-                            });
-                            
-                            // モーダル表示前にエラーハンドリングを追加
-                            try {
-                                console.log('🚪 [MODAL] Showing modal...');
-                                configModal.show();
-                                console.log('🚪 [MODAL] Modal show() called successfully');
-                            } catch (error) {
-                                console.error('🚪 [MODAL] Error showing modal:', error);
-                                ServerDeckUtils.cleanupModalRemnants();
-                                return;
-                            }
-                            
-                            // モーダルコンテンツが読み込まれた後にJavaScriptを再初期化
-                            ServerDeckUtils.initializeConfigModalScripts();
-                            // サーバー設定タブがデフォルトで開くため、初回ロード時にサーバーリストを明示的にロード
-                            ServerManagement.loadServersForConfigModal();
-                        }, 50);
-                    })
-                    .catch(error => console.error('Error loading config modal:', error));
+                this.openConfigModal();
             });
         }
+    },
+    
+    // 設定モーダルを開く
+    openConfigModal: function() {
+        console.log('🚪 [CONFIG] Opening config modal');
+        
+        const configModalElement = document.getElementById('configModal');
+        const configModalBody = document.getElementById('configModalBody');
+        
+        if (!configModalElement || !configModalBody) {
+            console.error('� [CONFIG] Config modal elements not found');
+            return;
+        }
+        
+        // 既存のモーダルをクリーンアップ
+        this.modalManager.cleanupAllModals();
+        
+        // コンテンツを読み込み
+        fetch('/config')
+            .then(response => response.text())
+            .then(html => {
+                configModalBody.innerHTML = html;
+                
+                // モーダルを開く
+                const modalInstance = this.modalManager.openModal(configModalElement);
+                
+                if (modalInstance) {
+                    // 隠れた時のクリーンアップイベント
+                    configModalElement.addEventListener('hidden.bs.modal', () => {
+                        console.log('🚪 [CONFIG] Config modal hidden, cleaning up');
+                        this.modalManager.cleanupModal(configModalElement);
+                        this.configModalInitialized = false;
+                    }, { once: true });
+                    
+                    // 表示された後にスクリプトを初期化
+                    configModalElement.addEventListener('shown.bs.modal', () => {
+                        console.log('🚪 [CONFIG] Config modal shown, initializing scripts');
+                        this.initializeConfigModalScripts();
+                        ServerManagement.loadServersForConfigModal();
+                    }, { once: true });
+                }
+            })
+            .catch(error => {
+                console.error('❌ [CONFIG] Error loading config modal:', error);
+                this.modalManager.cleanupAllModals();
+            });
     },
 
     // 設定モーダル内のスクリプト初期化（一度だけ実行）
@@ -212,221 +317,62 @@ window.ServerDeckUtils = {
             });
     },
     
-    // モーダル関連のDOM要素とスタイルをクリーンアップ
-    cleanupModalRemnants: function() {
-        console.log('🧹 [CLEANUP] Starting modal cleanup...');
-        
-        // モーダル本体の内容をクリア
-        const configModalBody = document.getElementById('configModalBody');
-        if (configModalBody) {
-            console.log('🧹 [CLEANUP] Clearing modal body content');
-            configModalBody.innerHTML = '';
-        } else {
-            console.warn('🧹 [CLEANUP] Modal body not found');
-        }
-        
-        // すべてのモーダルインスタンスを取得して強制的に閉じる
-        const configModalElement = document.getElementById('configModal');
-        if (configModalElement) {
-            console.log('🧹 [CLEANUP] Found modal element, checking for Bootstrap instance');
-            const existingModal = bootstrap.Modal.getInstance(configModalElement);
-            if (existingModal) {
-                console.log('🧹 [CLEANUP] Bootstrap modal instance found, disposing...');
-                try {
-                    existingModal.hide(); // まず隠す
-                    setTimeout(() => {
-                        existingModal.dispose(); // 少し遅延させてから破棄
-                        console.log('🧹 [CLEANUP] Modal instance disposed');
-                    }, 300);
-                } catch (e) {
-                    console.warn('🧹 [CLEANUP] Error disposing modal:', e);
-                }
-            } else {
-                console.log('🧹 [CLEANUP] No Bootstrap modal instance found');
-            }
-            
-            // モーダル要素から強制的にクラスを削除
-            console.log('🧹 [CLEANUP] Removing modal classes and attributes');
-            configModalElement.classList.remove('show');
-            configModalElement.style.display = 'none';
-            configModalElement.setAttribute('aria-hidden', 'true');
-            configModalElement.removeAttribute('aria-modal');
-        } else {
-            console.warn('🧹 [CLEANUP] Modal element not found');
-        }
-        
-        // バックドロップ検査とクリーンアップ
-        console.log('🧹 [CLEANUP] Checking for backdrop elements...');
-        const initialBackdrops = document.querySelectorAll('.modal-backdrop');
-        console.log(`🧹 [CLEANUP] Found ${initialBackdrops.length} backdrop elements initially`);
-        
-        // バックドロップ要素を削除（残留している場合）
-        setTimeout(() => {
-            const backdrops = document.querySelectorAll('.modal-backdrop');
-            console.log(`🧹 [CLEANUP] Found ${backdrops.length} backdrop elements to remove`);
-            backdrops.forEach((element, index) => {
-                console.log(`🧹 [CLEANUP] Removing backdrop element ${index + 1}`);
-                element.remove();
-            });
-            
-            // fade クラスが残っている要素も削除
-            const fadeElements = document.querySelectorAll('.modal.fade.show');
-            console.log(`🧹 [CLEANUP] Found ${fadeElements.length} modal elements with fade+show classes`);
-            fadeElements.forEach((element, index) => {
-                console.log(`🧹 [CLEANUP] Removing fade+show from modal element ${index + 1}`);
-                element.classList.remove('show');
-                element.style.display = 'none';
-            });
-            
-            // bodyからモーダル関連のクラスとスタイルを削除
-            console.log('🧹 [CLEANUP] Cleaning body classes and styles');
-            const bodyHadModalOpen = document.body.classList.contains('modal-open');
-            console.log(`🧹 [CLEANUP] Body had modal-open class: ${bodyHadModalOpen}`);
-            
-            document.body.classList.remove('modal-open');
-            document.body.style.overflow = '';
-            document.body.style.paddingRight = '';
-            document.body.style.marginRight = '';
-            
-            console.log('🧹 [CLEANUP] Modal cleanup completed successfully');
-        }, 100);
-        
-        // フラグをリセット
-        this.configModalInitialized = false;
-    },
-    
-    // 強制的にモーダルを閉じる（緊急時用）
-    forceCloseModal: function() {
-        console.log('🆘 [FORCE CLOSE] Emergency modal force close initiated');
-        
-        // すべてのモーダル要素を強制的に隠す
-        const modals = document.querySelectorAll('.modal');
-        console.log(`🆘 [FORCE CLOSE] Found ${modals.length} modal elements to close`);
-        modals.forEach((modal, index) => {
-            console.log(`🆘 [FORCE CLOSE] Closing modal element ${index + 1}`);
-            modal.classList.remove('show');
-            modal.style.display = 'none';
-            modal.setAttribute('aria-hidden', 'true');
-            modal.removeAttribute('aria-modal');
-        });
-        
-        // すべてのバックドロップを削除
-        const backdrops = document.querySelectorAll('.modal-backdrop');
-        console.log(`🆘 [FORCE CLOSE] Found ${backdrops.length} backdrop elements to remove`);
-        backdrops.forEach((backdrop, index) => {
-            console.log(`🆘 [FORCE CLOSE] Removing backdrop element ${index + 1}`);
-            backdrop.remove();
-        });
-        
-        // bodyクラスとスタイルの強制リセット
-        console.log('🆘 [FORCE CLOSE] Resetting body classes and styles');
-        document.body.classList.remove('modal-open');
-        document.body.style.overflow = '';
-        document.body.style.paddingRight = '';
-        document.body.style.marginRight = '';
-        
-        // すべてのBootstrap modalインスタンスを破棄
-        console.log('🆘 [FORCE CLOSE] Disposing all Bootstrap modal instances');
-        modals.forEach((modal, index) => {
-            const instance = bootstrap.Modal.getInstance(modal);
-            if (instance) {
-                console.log(`🆘 [FORCE CLOSE] Disposing Bootstrap instance for modal ${index + 1}`);
-                try {
-                    instance.dispose();
-                } catch (e) {
-                    console.warn(`🆘 [FORCE CLOSE] Error disposing modal ${index + 1}:`, e);
-                }
-            }
-        });
-        
-        // フラグをリセット
-        this.configModalInitialized = false;
-        
-        console.log('🆘 [FORCE CLOSE] Emergency modal force close completed');
-    },
-    
     // 直接設定モーダルを開き、Extra Importタブを選択する
     openConfigModalWithExtraImport: function(extraImportUrl) {
-        console.log('Opening config modal with Extra Import tab');
+        console.log('🚪 [CONFIG] Opening config modal with Extra Import tab');
         
-        // 事前にクリーンアップを実行
-        this.cleanupModalRemnants();
-        
-        // モーダル本体を取得
         const configModalElement = document.getElementById('configModal');
-        if (!configModalElement) {
-            console.error('Config modal element not found');
+        const configModalBody = document.getElementById('configModalBody');
+        
+        if (!configModalElement || !configModalBody) {
+            console.error('🚨 [CONFIG] Config modal elements not found');
             return;
         }
         
-        // モーダルのBodyにコンテンツを読み込む
-        const configModalBody = document.getElementById('configModalBody');
-        if (!configModalBody) {
-            console.error('Config modal body not found');
-            return;
-        }
+        // 既存のモーダルをクリーンアップ
+        this.modalManager.cleanupAllModals();
         
         fetch('/config')
             .then(response => response.text())
             .then(html => {
-                // モーダル表示前に内容をクリア
-                configModalBody.innerHTML = '';
+                configModalBody.innerHTML = html;
                 
-                // 少し遅延させてからHTMLを設定
-                setTimeout(() => {
-                    configModalBody.innerHTML = html;
+                // モーダルを開く
+                const modalInstance = this.modalManager.openModal(configModalElement);
+                
+                if (modalInstance) {
+                    // 隠れた時のクリーンアップイベント
+                    configModalElement.addEventListener('hidden.bs.modal', () => {
+                        console.log('🚪 [CONFIG] Extra Import modal hidden, cleaning up');
+                        this.modalManager.cleanupModal(configModalElement);
+                        this.configModalInitialized = false;
+                    }, { once: true });
                     
-                    // モーダルが閉じられた後のクリーンアップ処理を先に追加
-                    const handleModalHidden = function() {
-                        console.log('Extra Import modal hidden, starting cleanup');
-                        // 遅延させてクリーンアップを実行
-                        setTimeout(() => {
-                            ServerDeckUtils.cleanupModalRemnants();
-                        }, 150);
-                    };
-                    
-                    // 既存のイベントリスナーを削除
-                    configModalElement.removeEventListener('hidden.bs.modal', handleModalHidden);
-                    configModalElement.addEventListener('hidden.bs.modal', handleModalHidden, { once: true });
-                    
-                    // モーダルを表示
-                    const configModal = new bootstrap.Modal(configModalElement, {
-                        backdrop: 'static', // 背景クリックで閉じないように
-                        keyboard: true,
-                        focus: true
-                    });
-                    
-                    // モーダル表示前にエラーハンドリングを追加
-                    try {
-                        configModal.show();
-                    } catch (error) {
-                        console.error('Error showing Extra Import modal:', error);
-                        ServerDeckUtils.cleanupModalRemnants();
-                        return;
-                    }
-                    
-                    // モーダルが表示された後の処理
-                    const handleModalShown = function() {
-                        console.log('Modal shown, switching to Extra Import tab');
-                        // タブを切り替え
+                    // 表示された後にExtra Importタブに切り替え
+                    configModalElement.addEventListener('shown.bs.modal', () => {
+                        console.log('🚪 [CONFIG] Modal shown, switching to Extra Import tab');
+                        
+                        // スクリプトを初期化
+                        this.initializeConfigModalScripts();
+                        
+                        // Extra Importタブに切り替え
                         const extraImportTab = document.getElementById('extra-import-tab');
                         if (extraImportTab) {
                             const tab = new bootstrap.Tab(extraImportTab);
                             tab.show();
                             
-                            // ExtraImportを初期化
+                            // ExtraImportを初期化してURLを設定
                             setTimeout(() => {
                                 if (window.ExtraImport) {
                                     ExtraImport.initialize();
                                     
-                                    // URLパラメータがある場合は自動的に送信
                                     if (extraImportUrl) {
                                         const extraImportUrlInput = document.getElementById('extra-import-url');
                                         if (extraImportUrlInput) {
                                             extraImportUrlInput.value = decodeURIComponent(extraImportUrl);
                                             const form = document.getElementById('extra-import-form');
                                             if (form) {
-                                                console.log('Auto-submitting Extra Import form');
+                                                console.log('🚀 [CONFIG] Auto-submitting Extra Import form');
                                                 setTimeout(() => form.dispatchEvent(new Event('submit')), 200);
                                             }
                                         }
@@ -434,13 +380,12 @@ window.ServerDeckUtils = {
                                 }
                             }, 300);
                         }
-                    };
-                    configModalElement.addEventListener('shown.bs.modal', handleModalShown, { once: true });
-                    
-                    // その他の初期化
-                    ServerDeckUtils.initializeConfigModalScripts();
-                }, 50);
+                    }, { once: true });
+                }
             })
-            .catch(error => console.error('Error loading config modal:', error));
+            .catch(error => {
+                console.error('❌ [CONFIG] Error loading config modal:', error);
+                this.modalManager.cleanupAllModals();
+            });
     }
 };

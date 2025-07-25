@@ -249,5 +249,53 @@ window.BackupManagement = {
 
 ---
 
+## アーキテクチャ変更履歴
+
+#### 2025-07-26: モーダル管理システム全面リファクタリング
+
+**変更の背景**:
+- モーダルの二重開きや背景暗転問題の解決
+- 複雑なタイムアウト処理とイベントリスナー重複の排除
+- 編集ボタンの動作コンテキスト（ホーム画面 vs 設定パネル）による分離
+
+**主要な変更**:
+
+##### utils.js - 新しいモーダル管理システム
+```javascript
+// 旧システム: 複雑なクリーンアップ処理とタイムアウト
+cleanupModalRemnants() // 複雑な処理と遅延
+
+// 新システム: 統一モーダル管理
+modalManager: {
+    activeModals: new Set(),      // アクティブモーダル追跡
+    openModal(element, options),  // 安全なモーダル開閉
+    closeModal(element)          // 確実なクローズ処理
+    cleanupModal(element)        // インスタンス別クリーンアップ
+    cleanupAllModals()            // 全モーダル強制クリーンアップ
+}
+```
+
+##### server-management.js - 編集モーダル動作の改善
+```javascript
+// 新しい動作フロー
+openEditModal(serverId, fromConfigModal = false) {
+    // fromConfigModal により動作を分離:
+    // - ホーム画面から: 編集モーダルのみ
+    // - 設定パネルから: 設定パネル → 編集モーダル → 設定パネル
+}
+```
+
+**動作の変更**:
+- **ホーム画面の編集ボタン**: 編集モーダルのみ表示（設定パネルは開かない）
+- **設定パネルの編集ボタン**: 設定パネル閉じる → 編集モーダル → 設定パネル再表示
+- **保存/キャンセル**: 設定パネルから開いた場合のみ設定パネルに戻る
+
+**削除された機能**:
+- 複雑なタイムアウト処理（`setTimeout`を多用したクリーンアップ）
+- イベントリスナーの重複問題（`cloneNode`による回避）
+- `reopenConfigModal()`, `initializeEditModalCancelHandling()`関数
+
+---
+
 **最終更新**: 2025年7月25日  
 **バージョン**: 1.0

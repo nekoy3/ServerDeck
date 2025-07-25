@@ -52,27 +52,49 @@ window.ServerManagement = {
             .catch(error => console.error('Error updating main page server cards:', error));
     },
 
-    // サーバー編集モーダルを開く共通関数
-    openEditModalForServer: function(serverId) {
+    // サーバー編集モーダルを開く
+    openEditModal: function(serverId, fromConfigModal = false) {
+        console.log(`🔧 [EDIT] Opening edit modal for server: ${serverId}, fromConfigModal: ${fromConfigModal}`);
+        
         fetch(`/api/servers/${serverId}`)
             .then(response => response.ok ? response.json() : Promise.reject(response))
             .then(server => {
                 const editModalElement = document.getElementById('editServerModal');
                 if (!editModalElement) {
-                    console.error('Edit modal element not found');
+                    console.error('🚨 [EDIT] Edit modal element not found');
                     return;
                 }
-                const editModal = new bootstrap.Modal(editModalElement);
 
-                // 保存成功フラグをリセット
-                editModalElement.dataset.savedSuccessfully = 'false';
+                // 既存のモーダルをクリーンアップ
+                ServerDeckUtils.modalManager.cleanupModal(editModalElement);
 
+                // サーバーデータをフォームに設定
                 this.populateEditModal(server);
-                this.initializeEditModalCancelHandling();
-                editModal.show();
+
+                // モーダルを開く
+                const modalInstance = ServerDeckUtils.modalManager.openModal(editModalElement);
+                
+                if (modalInstance) {
+                    // 隠れた時の処理を設定
+                    editModalElement.addEventListener('hidden.bs.modal', () => {
+                        console.log('🔧 [EDIT] Edit modal hidden');
+                        ServerDeckUtils.modalManager.cleanupModal(editModalElement);
+                        
+                        // 設定モーダルから開いた場合のみ設定モーダルを再度開く
+                        if (fromConfigModal && !editModalElement.dataset.savedSuccessfully) {
+                            console.log('🔧 [EDIT] Reopening config modal after edit modal close');
+                            setTimeout(() => {
+                                ServerDeckUtils.openConfigModal();
+                            }, 100);
+                        }
+                        
+                        // フラグをリセット
+                        delete editModalElement.dataset.savedSuccessfully;
+                    }, { once: true });
+                }
             })
             .catch(error => {
-                console.error('Error fetching server data:', error);
+                console.error('❌ [EDIT] Error fetching server data:', error);
                 alert('サーバーデータの取得に失敗しました。');
             });
     },
@@ -264,18 +286,24 @@ window.ServerManagement = {
     // イベントハンドラー関数群
     handleEditServerClick: function(event) {
         const serverId = event.target.dataset.id;
+        console.log(`🔧 [EDIT] Edit button clicked for server: ${serverId}`);
         
-        // 設定モーダル内からクリックされた場合、設定モーダルを閉じる
+        // 設定モーダル内からクリックされた場合は設定モーダルを閉じてから編集モーダルを開く
         const configModal = bootstrap.Modal.getInstance(document.getElementById('configModal'));
         if (configModal) {
+            console.log('🔧 [EDIT] Closing config modal before opening edit modal');
             configModal.hide();
-            // モーダルが完全に閉じられてから編集モーダルを開く
-            setTimeout(() => {
-                this.openEditModalForServer(serverId);
-            }, 300);
+            
+            // 設定モーダルが完全に閉じられてから編集モーダルを開く
+            const configModalElement = document.getElementById('configModal');
+            configModalElement.addEventListener('hidden.bs.modal', () => {
+                console.log('🔧 [EDIT] Config modal closed, opening edit modal');
+                this.openEditModal(serverId, true); // 設定モーダルから開いたことを示すフラグ
+            }, { once: true });
         } else {
-            // メインページから直接呼ばれた場合
-            this.openEditModalForServer(serverId);
+            // メインページから直接呼ばれた場合（設定パネルは開かない）
+            console.log('🔧 [EDIT] Opening edit modal directly from main page');
+            this.openEditModal(serverId, false);
         }
     },
 
@@ -308,15 +336,18 @@ window.ServerManagement = {
 
     handleSetupButtonClick: function(event) {
         const serverId = event.target.dataset.id;
+        console.log(`🔧 [SETUP] Setup button clicked for server: ${serverId}`);
         
         const configModal = bootstrap.Modal.getInstance(document.getElementById('configModal'));
         if (configModal) {
+            console.log('🔧 [SETUP] Closing config modal before opening edit modal');
             configModal.hide();
-            setTimeout(() => {
-                this.openEditModalForServer(serverId);
-            }, 300);
+            const configModalElement = document.getElementById('configModal');
+            configModalElement.addEventListener('hidden.bs.modal', () => {
+                this.openEditModal(serverId, true);
+            }, { once: true });
         } else {
-            this.openEditModalForServer(serverId);
+            this.openEditModal(serverId, false);
         }
     },
 
@@ -402,7 +433,8 @@ window.ServerManagement = {
         // is_new または is_deleted のカードがクリックされた場合の特殊処理
         if (card.classList.contains('border-success')) {
             // 緑枠のカード（is_new）がクリックされた場合、編集モーダルを開く
-            this.openEditModalForServer(serverId);
+            console.log('🔧 [CARD] Opening edit modal for new server');
+            this.openEditModal(serverId, true); // 設定モーダル内なので true
         } else if (card.classList.contains('border-danger')) {
             // 赤枠のカード（is_deleted）がクリックされた場合、確認ダイアログを表示
             ExtraImport.showDeleteConfirmation(serverId, card.querySelector('.server-card-title').textContent);
@@ -447,17 +479,21 @@ window.ServerManagement = {
                 .then(response => response.ok ? response.json() : Promise.reject('サーバー情報の更新に失敗しました。'))
                 .then(() => {
                     alert('サーバー情報が更新されました！');
-                    const editModal = bootstrap.Modal.getInstance(document.getElementById('editServerModal'));
                     const editModalElement = document.getElementById('editServerModal');
-                    if (editModal && editModalElement) {
-                        // 保存成功フラグを設定
+                    
+                    // 保存成功フラグを設定（設定モーダル再表示を防ぐため）
+                    if (editModalElement) {
                         editModalElement.dataset.savedSuccessfully = 'true';
-                        editModal.hide();
-                        // 編集モーダルが完全に閉じた後、設定パネルを再度開く
-                        editModalElement.addEventListener('hidden.bs.modal', () => {
-                            this.reopenConfigModal();
-                        }, { once: true });
+                        console.log('🔄 [SAVE] Server saved successfully, closing edit modal');
+                        
+                        // モーダルを閉じる
+                        const modalInstance = bootstrap.Modal.getInstance(editModalElement);
+                        if (modalInstance) {
+                            modalInstance.hide();
+                        }
                     }
+                    
+                    // データを更新
                     this.loadServersForConfigModal();
                     this.updateMainPageServerCards();
                 })
@@ -465,39 +501,6 @@ window.ServerManagement = {
                     console.error('Error updating server:', error);
                     alert(error);
                 });
-            });
-        }
-    },
-
-    // 編集モーダルを閉じた後に設定パネルを再度開く
-    reopenConfigModal: function() {
-        setTimeout(() => {
-            ServerDeckUtils.loadConfigModal();
-        }, 300);
-    },
-
-    // 編集モーダルのキャンセル処理を初期化
-    initializeEditModalCancelHandling: function() {
-        const editModal = document.getElementById('editServerModal');
-        if (editModal) {
-            // キャンセルボタンと×ボタンの処理
-            const cancelButtons = editModal.querySelectorAll('[data-bs-dismiss="modal"]');
-            cancelButtons.forEach(button => {
-                button.addEventListener('click', () => {
-                    editModal.addEventListener('hidden.bs.modal', () => {
-                        this.reopenConfigModal();
-                    }, { once: true });
-                });
-            });
-
-            // Escキーでの閉じる処理
-            editModal.addEventListener('hide.bs.modal', (event) => {
-                // 保存時以外の場合（キャンセル時）
-                if (event.target === editModal && !editModal.dataset.savedSuccessfully) {
-                    editModal.addEventListener('hidden.bs.modal', () => {
-                        this.reopenConfigModal();
-                    }, { once: true });
-                }
             });
         }
     }
