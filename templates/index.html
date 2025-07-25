@@ -2,7 +2,15 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, shrink-to-fit=no">
+    <meta name="viewport" content="width=device-width, initi    <!-- Custom JavaScript Modules --> 
+    <script src="{{ url_for('static', filename='js/notification.js') }}?v=4"></script>
+    <script src="{{ url_for('static', filename='js/utils.js') }}?v=4"></script>
+    <script src="{{ url_for('static', filename='js/ping-status.js') }}?v=4"></script>
+    <script src="{{ url_for('static', filename='js/server-management.js') }}?v=4"></script>
+    <script src="{{ url_for('static', filename='js/ssh-key-management.js') }}?v=4"></script>
+    <script src="{{ url_for('static', filename='js/extra-import.js') }}?v=4"></script>
+    <script src="{{ url_for('static', filename='js/backup-management.js') }}?v=4"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}?v=4"></script>=1.0, shrink-to-fit=no">
     <title>ServerDeck - ホーム</title>
     <!-- <link rel="icon" type="image/x-icon" href="data:image/x-icon;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAAAdgAAAHYBTnsmCAAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAAFkSURBVDiNpZM9SwNBEIafgwQSCxsLwcJCG1sLG0uxsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWws7GwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsLWwsLGwsAAAAASUVORK5CYII="> -->
     <!-- Bootstrap CSS -->
@@ -115,7 +123,6 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
-                    <button type="button" class="btn btn-outline-warning" id="forceCloseModal" onclick="ServerDeckUtils.forceCloseModal()">強制終了</button>
                 </div>
             </div>
         </div>

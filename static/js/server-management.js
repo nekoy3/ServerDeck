@@ -2,8 +2,7 @@
 window.ServerManagement = {
     // メインページのサーバーカードを更新する関数
     updateMainPageServerCards: function() {
-        fetch('/api/servers')
-            .then(response => response.json())
+        APIManager.servers.getAll()
             .then(servers => {
                 // メインページ上のすべてのサーバーカードを更新
                 servers.forEach(server => {
@@ -49,15 +48,17 @@ window.ServerManagement = {
                 // イベントリスナーを再アタッチ
                 this.attachServerCardEventListeners();
             })
-            .catch(error => console.error('Error updating main page server cards:', error));
+            .catch(error => {
+                console.error('Error updating main page server cards:', error);
+                NotificationManager.error('サーバー情報の更新に失敗しました');
+            });
     },
 
     // サーバー編集モーダルを開く
     openEditModal: function(serverId, fromConfigModal = false) {
         console.log(`🔧 [EDIT] Opening edit modal for server: ${serverId}, fromConfigModal: ${fromConfigModal}`);
         
-        fetch(`/api/servers/${serverId}`)
-            .then(response => response.ok ? response.json() : Promise.reject(response))
+        APIManager.servers.get(serverId)
             .then(server => {
                 const editModalElement = document.getElementById('editServerModal');
                 if (!editModalElement) {
@@ -81,17 +82,17 @@ window.ServerManagement = {
 
                 // モーダルを開く（遅延を追加してDOM準備を確実にする）
                 setTimeout(() => {
-                    const modalInstance = ServerDeckUtils.modalManager.openModal(editModalElement);
-                    
-                    if (modalInstance) {
-                        // 隠れた時の処理を設定
-                        const handleHidden = () => {
-                            console.log('🔧 [EDIT] Edit modal hidden');
-                            ServerDeckUtils.modalManager.cleanupModal(editModalElement);
-                            
-                            // 設定モーダルから開いた場合のみ設定モーダルを再度開く
-                            if (fromConfigModal && !editModalElement.dataset.savedSuccessfully) {
-                                console.log('🔧 [EDIT] Reopening config modal after edit modal close');
+                    ServerDeckUtils.modalManager.openModal(editModalElement)
+                        .then(modalInstance => {
+                            if (modalInstance) {
+                                // 隠れた時の処理を設定
+                                const handleHidden = () => {
+                                    console.log('🔧 [EDIT] Edit modal hidden');
+                                    ServerDeckUtils.modalManager.cleanupModal(editModalElement);
+                                    
+                                    // 設定モーダルから開いた場合のみ設定モーダルを再度開く
+                                    if (fromConfigModal && !editModalElement.dataset.savedSuccessfully) {
+                                        console.log('🔧 [EDIT] Reopening config modal after edit modal close');
                                 setTimeout(() => {
                                     ServerDeckUtils.openConfigModal();
                                 }, 100);
@@ -130,12 +131,17 @@ window.ServerManagement = {
                             }
                         }, 100);
                     }
-                }, 50); // 50ms遅延でDOM準備を確実にする
-            })
-            .catch(error => {
-                console.error('❌ [EDIT] Error fetching server data:', error);
-                alert('サーバーデータの取得に失敗しました。');
-            });
+                })
+                .catch(modalError => {
+                    console.error('🔧 [EDIT] Modal creation failed:', modalError);
+                    NotificationManager.error('モーダルの表示に失敗しました');
+                });
+            }, 50); // 50ms遅延でDOM準備を確実にする
+        })
+        .catch(error => {
+            console.error('❌ [EDIT] Error fetching server data:', error);
+            NotificationManager.error('サーバーデータの取得に失敗しました');
+        });
     },
 
     // 編集モーダルにサーバーデータを設定
@@ -208,8 +214,7 @@ window.ServerManagement = {
 
     // 設定モーダル内のサーバーリストをロードする関数
     loadServersForConfigModal: function() {
-        fetch('/api/servers')
-            .then(response => response.json())
+        APIManager.servers.getAll()
             .then(servers => {
                 const serverListDiv = document.getElementById('server-list');
                 if (!serverListDiv) return;
@@ -255,7 +260,10 @@ window.ServerManagement = {
                 // 個別サーバーの編集・削除ボタン、および一括削除関連のイベントリスナーを再設定
                 this.attachServerCardEventListeners();
             })
-            .catch(error => console.error('Error loading servers for config modal:', error));
+            .catch(error => {
+                console.error('Error loading servers for config modal:', error);
+                NotificationManager.error('サーバーリストの読み込みに失敗しました');
+            });
     },
 
     // 個別サーバーカードの編集・削除ボタンにイベントリスナーをアタッチする関数
@@ -357,27 +365,16 @@ window.ServerManagement = {
     handleDeleteServerClick: function(event) {
         const serverId = event.target.dataset.id;
         if (confirm('本当にこのサーバーを削除しますか？')) {
-            fetch(`/api/servers/${serverId}`, {
-                method: 'DELETE'
-            })
-            .then(response => {
-                if (!response.ok) {
-                    return response.json().then(err => { throw err; });
-                }
-                if (response.status === 204) {
-                    return {};
-                }
-                return response.json();
-            })
-            .then(data => {
-                alert('サーバーが削除されました！');
-                this.loadServersForConfigModal();
-                this.updateMainPageServerCards();
-            })
-            .catch(error => {
-                console.error('Error deleting server:', error);
-                alert('サーバーの削除に失敗しました: ' + (error.message || JSON.stringify(error)));
-            });
+            APIManager.servers.delete(serverId)
+                .then(() => {
+                    NotificationManager.success('サーバーが削除されました！');
+                    this.loadServersForConfigModal();
+                    this.updateMainPageServerCards();
+                })
+                .catch(error => {
+                    console.error('Error deleting server:', error);
+                    NotificationManager.error('サーバーの削除に失敗しました: ' + error.message);
+                });
         }
     },
 
@@ -447,18 +444,16 @@ window.ServerManagement = {
     handleBulkDeleteServersClick: function() {
         const selectedServerIds = Array.from(document.querySelectorAll('.config-server-checkbox:checked')).map(cb => cb.dataset.serverId);
         if (selectedServerIds.length > 0 && confirm(`${selectedServerIds.length}個のサーバーを本当に削除しますか？`)) {
-            fetch('/bulk_delete_servers', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ server_ids: selectedServerIds })
-            })
-            .then(response => response.ok ? response.json() : response.json().then(err => { throw err; }))
+            APIManager.servers.bulkDelete(selectedServerIds)
             .then(() => {
-                alert('選択されたサーバーが削除されました！');
+                NotificationManager.success('選択されたサーバーが削除されました！');
                 this.loadServersForConfigModal();
                 this.updateMainPageServerCards();
             })
-            .catch(error => console.error('Error during bulk delete of servers:', error));
+            .catch(error => {
+                console.error('Error during bulk delete of servers:', error);
+                NotificationManager.error('サーバーの一括削除に失敗しました: ' + error.message);
+            });
         }
     },
 
@@ -520,7 +515,7 @@ window.ServerManagement = {
                 })
                 .then(response => response.ok ? response.json() : Promise.reject('サーバー情報の更新に失敗しました。'))
                 .then(() => {
-                    alert('サーバー情報が更新されました！');
+                    NotificationManager.success('サーバー情報が更新されました！');
                     const editModalElement = document.getElementById('editServerModal');
                     
                     // 保存成功フラグを設定（設定モーダル再表示を防ぐため）
@@ -541,7 +536,7 @@ window.ServerManagement = {
                 })
                 .catch(error => {
                     console.error('Error updating server:', error);
-                    alert(error);
+                    NotificationManager.error('サーバー情報の更新に失敗しました: ' + error.message);
                 });
             });
         }

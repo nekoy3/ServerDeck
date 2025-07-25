@@ -21,8 +21,12 @@ window.BackupManagement = {
 
     // バックアップファイルリストの読み込み
     loadBackupFileList: function() {
-        fetch('/api/backups')
-            .then(response => response.json())
+        if (!window.APIManager) {
+            console.error('APIManager not available');
+            return;
+        }
+        
+        window.APIManager.get('/api/backups')
             .then(backupFiles => {
                 const backupFileListDiv = document.getElementById('backup-file-list');
                 if (!backupFileListDiv) return;
@@ -59,6 +63,9 @@ window.BackupManagement = {
                 const backupFileListDiv = document.getElementById('backup-file-list');
                 if (backupFileListDiv) {
                     backupFileListDiv.innerHTML = '<p class="text-danger">バックアップファイルの読み込みに失敗しました。</p>';
+                }
+                if (window.NotificationManager) {
+                    window.NotificationManager.error('バックアップファイルの読み込みに失敗しました。');
                 }
             });
     },
@@ -106,14 +113,13 @@ window.BackupManagement = {
 
     // 設定のエクスポート
     exportConfig: function() {
-        fetch('/api/config/export', {
-            method: 'GET'
-        })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error('Export failed');
-            }
-            return response.blob();
+        if (!window.APIManager) {
+            console.error('APIManager not available');
+            return;
+        }
+        
+        window.APIManager.get('/api/config/export', {
+            responseType: 'blob'
         })
         .then(blob => {
             // ファイルダウンロード
@@ -126,12 +132,20 @@ window.BackupManagement = {
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
             
-            alert('設定がエクスポートされました！');
+            if (window.NotificationManager) {
+                window.NotificationManager.success('設定がエクスポートされました！');
+            } else {
+                alert('設定がエクスポートされました！');
+            }
             this.loadBackupFileList(); // リストを更新
         })
         .catch(error => {
             console.error('Error exporting config:', error);
-            alert('設定のエクスポートに失敗しました。');
+            if (window.NotificationManager) {
+                window.NotificationManager.error('設定のエクスポートに失敗しました。');
+            } else {
+                alert('設定のエクスポートに失敗しました。');
+            }
         });
     },
 
@@ -142,25 +156,29 @@ window.BackupManagement = {
         const file = fileInput.files[0];
         
         if (!file) {
-            alert('ファイルを選択してください。');
+            if (window.NotificationManager) {
+                window.NotificationManager.warning('ファイルを選択してください。');
+            } else {
+                alert('ファイルを選択してください。');
+            }
             return;
         }
 
         const formData = new FormData();
         formData.append('file', file);
 
-        fetch('/api/config/import', {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => {
-            if (!response.ok) {
-                return response.json().then(err => { throw err; });
-            }
-            return response.json();
-        })
+        if (!window.APIManager) {
+            console.error('APIManager not available');
+            return;
+        }
+
+        window.APIManager.post('/api/config/import', formData)
         .then(data => {
-            alert('設定がインポートされました！ページを再読み込みしてください。');
+            if (window.NotificationManager) {
+                window.NotificationManager.success('設定がインポートされました！ページを再読み込みしてください。');
+            } else {
+                alert('設定がインポートされました！ページを再読み込みしてください。');
+            }
             fileInput.value = '';
             // サーバーリストを更新
             if (typeof ServerManagement !== 'undefined') {
@@ -170,7 +188,11 @@ window.BackupManagement = {
         })
         .catch(error => {
             console.error('Error importing config:', error);
-            alert('設定のインポートに失敗しました: ' + (error.message || JSON.stringify(error)));
+            if (window.NotificationManager) {
+                window.NotificationManager.error('設定のインポートに失敗しました: ' + (error.message || JSON.stringify(error)));
+            } else {
+                alert('設定のインポートに失敗しました: ' + (error.message || JSON.stringify(error)));
+            }
         });
     },
 
@@ -186,22 +208,27 @@ window.BackupManagement = {
 
     // バックアップの削除
     deleteBackup: function(filename) {
-        fetch(`/api/backups/delete/${encodeURIComponent(filename)}`, {
-            method: 'DELETE'
-        })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error('Delete failed');
-            }
-            return response.json();
-        })
+        if (!window.APIManager) {
+            console.error('APIManager not available');
+            return;
+        }
+        
+        window.APIManager.delete(`/api/backups/delete/${encodeURIComponent(filename)}`)
         .then(data => {
-            alert('バックアップファイルが削除されました。');
+            if (window.NotificationManager) {
+                window.NotificationManager.success('バックアップファイルが削除されました。');
+            } else {
+                alert('バックアップファイルが削除されました。');
+            }
             BackupManagement.loadBackupFileList(); // リストを更新
         })
         .catch(error => {
             console.error('Error deleting backup:', error);
-            alert('バックアップファイルの削除に失敗しました。');
+            if (window.NotificationManager) {
+                window.NotificationManager.error('バックアップファイルの削除に失敗しました。');
+            } else {
+                alert('バックアップファイルの削除に失敗しました。');
+            }
         });
     }
 };

@@ -26,11 +26,18 @@ servers:
 - id: server-1753347563582-7348
   name: cache
   type: node
-  port: 22
+  port: '22'
   host: cache.mynk.home
   is_extra: true
-  is_new: true
+  is_new: false
   ping_enabled: true
+  url: ''
+  tags: ''
+  description: ''
+  auth_method: ssh_key
+  username: nekoy
+  ssh_key_id: sshkey-1752048252175
+  is_deleted: false
 - id: server-1753347563582-4140
   name: db
   type: node

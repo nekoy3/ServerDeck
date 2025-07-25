@@ -63,15 +63,28 @@ window.PingStatus = {
             // Fetch status for all boxes (initial load or periodic refresh)
             document.querySelectorAll('.ping-status-box').forEach(box => {
                 const currentServerId = box.id.replace('ping-status-', '');
-                fetch(`/api/ping_status/${currentServerId}`)
-                    .then(response => response.json())
-                    .then(statusData => {
-                        updateSingleBox(box, statusData);
-                    })
-                    .catch(error => {
-                        console.error('Error fetching ping status for', currentServerId, ':', error);
-                        updateSingleBox(box, { status: 'error', response_time: null, packet_loss: null });
-                    });
+                
+                if (window.APIManager) {
+                    window.APIManager.get(`/api/ping_status/${currentServerId}`)
+                        .then(statusData => {
+                            updateSingleBox(box, statusData);
+                        })
+                        .catch(error => {
+                            console.error('Error fetching ping status for', currentServerId, ':', error);
+                            updateSingleBox(box, { status: 'error', response_time: null, packet_loss: null });
+                        });
+                } else {
+                    // Fallback to direct fetch if APIManager is not available
+                    fetch(`/api/ping_status/${currentServerId}`)
+                        .then(response => response.json())
+                        .then(statusData => {
+                            updateSingleBox(box, statusData);
+                        })
+                        .catch(error => {
+                            console.error('Error fetching ping status for', currentServerId, ':', error);
+                            updateSingleBox(box, { status: 'error', response_time: null, packet_loss: null });
+                        });
+                }
             });
         }
     }

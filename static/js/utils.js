@@ -10,7 +10,7 @@ window.ServerDeckUtils = {
         openModal: function(modalElement, options = {}) {
             if (!modalElement || !modalElement.id) {
                 console.error('🚨 [MODAL] Modal element not found or invalid');
-                return null;
+                return Promise.resolve(null);
             }
             
             const modalId = modalElement.id;
@@ -19,50 +19,99 @@ window.ServerDeckUtils = {
             // DOM要素の状態を事前チェック
             if (!document.body.contains(modalElement)) {
                 console.error(`🚨 [MODAL] Modal element ${modalId} is not in DOM`);
-                return null;
+                return Promise.resolve(null);
             }
             
-            // 既存のインスタンスをクリーンアップ
-            this.cleanupModal(modalElement);
+            // 全てのモーダルを一旦クリーンアップ（競合を防ぐため）
+            this.cleanupAllModals();
             
-            // 新しいインスタンスを作成
-            const defaultOptions = {
-                backdrop: 'static',
-                keyboard: true,
-                focus: true
-            };
-            
-            const modalOptions = { ...defaultOptions, ...options };
-            
-            try {
-                // モーダル内の重要な要素が存在するかチェック
-                const modalDialog = modalElement.querySelector('.modal-dialog');
-                const modalContent = modalElement.querySelector('.modal-content');
-                const modalBody = modalElement.querySelector('.modal-body');
-                
-                if (!modalDialog || !modalContent || !modalBody) {
-                    console.error(`🚨 [MODAL] Modal ${modalId} structure is incomplete`, {
-                        hasDialog: !!modalDialog,
-                        hasContent: !!modalContent, 
-                        hasBody: !!modalBody
-                    });
-                    return null;
-                }
-                
-                const modalInstance = new bootstrap.Modal(modalElement, modalOptions);
-                
-                // アクティブなモーダルとして記録
-                this.activeModals.add(modalId);
-                
-                modalInstance.show();
-                console.log(`✅ [MODAL] Modal ${modalId} opened successfully`);
-                return modalInstance;
-            } catch (error) {
-                console.error(`❌ [MODAL] Error opening modal ${modalId}:`, error);
-                console.error('Modal element structure:', modalElement.innerHTML.substring(0, 200) + '...');
-                this.activeModals.delete(modalId);
-                return null;
-            }
+            // モーダル要素が完全に準備されるまで待機
+            return new Promise((resolve) => {
+                // DOM処理の前に必要な遅延を追加
+                setTimeout(() => {
+                    try {
+                        // Bootstrap modal 関連のDOM属性を強制リセット
+                        modalElement.classList.remove('show');
+                        modalElement.style.display = 'none';
+                        modalElement.setAttribute('aria-hidden', 'true');
+                        modalElement.removeAttribute('aria-modal');
+                        modalElement.removeAttribute('role');
+                        
+                        // 新しいインスタンスを作成するための追加遅延
+                        setTimeout(() => {
+                            try {
+                                // 新しいインスタンスを作成
+                                const defaultOptions = {
+                                    backdrop: 'static',
+                                    keyboard: true,
+                                    focus: true
+                                };
+                                
+                                const modalOptions = { ...defaultOptions, ...options };
+                                
+                                // モーダル内の重要な要素が存在するかチェック
+                                const modalDialog = modalElement.querySelector('.modal-dialog');
+                                const modalContent = modalElement.querySelector('.modal-content');
+                                const modalBody = modalElement.querySelector('.modal-body');
+                                
+                                if (!modalDialog || !modalContent || !modalBody) {
+                                    console.error(`🚨 [MODAL] Modal ${modalId} structure is incomplete`, {
+                                        hasDialog: !!modalDialog,
+                                        hasContent: !!modalContent, 
+                                        hasBody: !!modalBody,
+                                        elementHtml: modalElement.innerHTML.substring(0, 200) + '...'
+                                    });
+                                    resolve(null);
+                                    return;
+                                }
+                                
+                                // Bootstrapの既存のインスタンスを確実に削除
+                                const existingInstance = bootstrap.Modal.getInstance(modalElement);
+                                if (existingInstance) {
+                                    try {
+                                        existingInstance.dispose();
+                                    } catch (e) {
+                                        console.warn(`⚠️  [MODAL] Error disposing existing instance: ${e.message}`);
+                                    }
+                                }
+                                
+                                const modalInstance = new bootstrap.Modal(modalElement, modalOptions);
+                                
+                                // アクティブなモーダルとして記録
+                                this.activeModals.add(modalId);
+                                
+                                // モーダル表示（エラーを無視）
+                                try {
+                                    modalInstance.show();
+                                    console.log(`✅ [MODAL] Modal ${modalId} opened successfully`);
+                                } catch (showError) {
+                                    // Bootstrap内部エラーは無視して継続
+                                    console.warn(`⚠️  [MODAL] Bootstrap show error (ignored): ${showError.message}`);
+                                }
+                                resolve(modalInstance);
+                                
+                            } catch (innerError) {
+                                console.error(`❌ [MODAL] Error creating modal instance ${modalId}:`, innerError);
+                                this.activeModals.delete(modalId);
+                                resolve(null);
+                            }
+                        }, 100); // 100ms遅延でBootstrap準備を確実にする
+                        
+                    } catch (error) {
+                        console.error(`❌ [MODAL] Error opening modal ${modalId}:`, error);
+                        console.error('Modal element details:', {
+                            id: modalElement.id,
+                            classes: modalElement.className,
+                            style: modalElement.style.cssText,
+                            hasDialog: !!modalElement.querySelector('.modal-dialog'),
+                            hasContent: !!modalElement.querySelector('.modal-content'),
+                            hasBody: !!modalElement.querySelector('.modal-body')
+                        });
+                        this.activeModals.delete(modalId);
+                        resolve(null);
+                    }
+                }, 50); // DOM安定化のため50ms待機
+            });
         },
         
         // モーダルを安全に閉じる
@@ -116,13 +165,27 @@ window.ServerDeckUtils = {
         cleanupAllModals: function() {
             console.log('🧹 [MODAL] Cleaning up all modals');
             
-            // アクティブなモーダルをクリーンアップ
-            this.activeModals.forEach(modalId => {
-                const modalElement = document.getElementById(modalId);
-                if (modalElement) {
-                    this.cleanupModal(modalElement);
+            // 全てのBootstrapモーダルインスタンスを検索して削除
+            document.querySelectorAll('.modal').forEach(modalElement => {
+                const instance = bootstrap.Modal.getInstance(modalElement);
+                if (instance) {
+                    try {
+                        instance.hide();
+                        instance.dispose();
+                    } catch (e) {
+                        console.warn(`⚠️  [MODAL] Error disposing modal ${modalElement.id}:`, e.message);
+                    }
                 }
+                
+                // DOM状態を強制リセット
+                modalElement.classList.remove('show');
+                modalElement.style.display = 'none';
+                modalElement.setAttribute('aria-hidden', 'true');
+                modalElement.removeAttribute('aria-modal');
+                modalElement.removeAttribute('role');
             });
+            
+            // アクティブなモーダル記録をクリア
             this.activeModals.clear();
             
             // 残留するバックドロップを削除
@@ -409,5 +472,130 @@ window.ServerDeckUtils = {
                 console.error('❌ [CONFIG] Error loading config modal:', error);
                 this.modalManager.cleanupAllModals();
             });
+    }
+};
+
+// API管理システム
+window.APIManager = {
+    // 共通APIリクエスト関数
+    request: async function(url, options = {}) {
+        const defaultOptions = {
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        };
+        
+        const mergedOptions = { ...defaultOptions, ...options };
+        
+        // FormDataの場合はContent-Typeヘッダーを削除（ブラウザが自動設定）
+        if (options.body instanceof FormData) {
+            delete mergedOptions.headers['Content-Type'];
+        }
+        
+        try {
+            const response = await fetch(url, mergedOptions);
+            
+            if (!response.ok) {
+                // エラーレスポンスの処理
+                let errorMessage;
+                try {
+                    const errorData = await response.json();
+                    errorMessage = errorData.message || errorData.error || `HTTP ${response.status}: ${response.statusText}`;
+                } catch {
+                    errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+                }
+                throw new Error(errorMessage);
+            }
+            
+            // 成功レスポンスの処理
+            if (response.status === 204) {
+                return {}; // No Content
+            }
+            
+            // Blobレスポンスの場合
+            if (options.responseType === 'blob') {
+                return await response.blob();
+            }
+            
+            return await response.json();
+        } catch (error) {
+            console.error(`API request failed for ${url}:`, error);
+            throw error;
+        }
+    },
+    
+    // 便利メソッド
+    get: function(url, options = {}) {
+        return this.request(url, { ...options, method: 'GET' });
+    },
+    
+    post: function(url, data, options = {}) {
+        const body = data instanceof FormData ? data : JSON.stringify(data);
+        return this.request(url, { ...options, method: 'POST', body });
+    },
+    
+    put: function(url, data, options = {}) {
+        return this.request(url, { ...options, method: 'PUT', body: JSON.stringify(data) });
+    },
+    
+    delete: function(url, options = {}) {
+        return this.request(url, { ...options, method: 'DELETE' });
+    },
+    
+    // サーバー関連API
+    servers: {
+        // 全サーバー取得
+        getAll: () => APIManager.request('/api/servers'),
+        
+        // 単一サーバー取得
+        get: (id) => APIManager.request(`/api/servers/${id}`),
+        
+        // サーバー作成/更新
+        save: (data) => {
+            const method = data.id ? 'PUT' : 'POST';
+            const url = data.id ? `/api/servers/${data.id}` : '/api/servers';
+            return APIManager.request(url, {
+                method,
+                body: JSON.stringify(data)
+            });
+        },
+        
+        // サーバー削除
+        delete: (id) => APIManager.request(`/api/servers/${id}`, { method: 'DELETE' }),
+        
+        // 一括削除
+        bulkDelete: (ids) => APIManager.request('/bulk_delete_servers', {
+            method: 'POST',
+            body: JSON.stringify({ server_ids: ids })
+        })
+    },
+    
+    // SSHキー関連API
+    sshKeys: {
+        getAll: () => APIManager.request('/api/ssh_keys'),
+        get: (id) => APIManager.request(`/api/ssh_keys/${id}`),
+        delete: (id) => APIManager.request(`/api/ssh_keys/${id}`, { method: 'DELETE' }),
+        bulkDelete: (ids) => APIManager.request('/bulk_delete_ssh_keys', {
+            method: 'POST',
+            body: JSON.stringify({ ssh_key_ids: ids })
+        })
+    },
+    
+    // Extra Import関連API  
+    extraImport: {
+        getUrl: () => APIManager.request('/api/config/extra_import_url'),
+        setUrl: (url) => APIManager.request('/api/config/extra_import_url', {
+            method: 'POST',
+            body: JSON.stringify({ extra_import_url: url })
+        }),
+        confirm: (action, serverId = null) => {
+            const body = { action };
+            if (serverId) body.server_id = serverId;
+            return APIManager.request('/api/extra_import_url/confirm', {
+                method: 'POST',
+                body: JSON.stringify(body)
+            });
+        }
     }
 };

@@ -142,12 +142,12 @@ window.ExtraImport = {
                 const extraImportConfirmModal = new bootstrap.Modal(document.getElementById('extraImportConfirmModal'));
                 extraImportConfirmModal.show();
             } else {
-                alert('Extra Import URLが保存されました！');
+                NotificationManager.success('Extra Import URLが保存されました！');
             }
         })
         .catch(error => {
             console.error('Error saving Extra Import URL:', error);
-            alert('Extra Import URLの保存に失敗しました: ' + (error.message || JSON.stringify(error)));
+            NotificationManager.error('Extra Import URLの保存に失敗しました: ' + error.message);
         });
     },
 

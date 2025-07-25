@@ -128,7 +128,7 @@ window.SshKeyManagement = {
                 return response.json();
             })
             .then(() => {
-                alert('SSHキーが削除されました！');
+                NotificationManager.success('SSHキーが削除されました！');
                 SshKeyManagement.loadSshKeysForManagementModal();
             })
             .catch(error => console.error('Error deleting SSH key:', error));
@@ -146,7 +146,7 @@ window.SshKeyManagement = {
             })
             .then(response => response.ok ? response.json() : response.json().then(err => { throw err; }))
             .then(() => {
-                alert('選択されたSSHキーが削除されました！');
+                NotificationManager.success('選択されたSSHキーが削除されました！');
                 SshKeyManagement.loadSshKeysForManagementModal();
             })
             .catch(error => console.error('Error during bulk delete of SSH keys:', error));
@@ -157,7 +157,7 @@ window.SshKeyManagement = {
     uploadSshKey: function(sshKeyUploadInput, sshKeyPathInput) {
         const file = sshKeyUploadInput.files[0];
         if (!file) {
-            alert('アップロードするファイルを選択してください。');
+            NotificationManager.warning('アップロードするファイルを選択してください');
             return;
         }
 
@@ -175,13 +175,13 @@ window.SshKeyManagement = {
             return response.json();
         })
         .then(data => {
-            alert('SSHキーがアップロードされました！');
+            NotificationManager.success('SSHキーがアップロードされました！');
             if(sshKeyPathInput) sshKeyPathInput.value = data.path;
             if(sshKeyUploadInput) sshKeyUploadInput.value = '';
         })
         .catch(error => {
             console.error('Error uploading SSH key:', error);
-            alert('SSHキーのアップロードに失敗しました: ' + error.message);
+            NotificationManager.error('SSHキーのアップロードに失敗しました: ' + error.message);
         });
     },
 
@@ -215,14 +215,14 @@ window.SshKeyManagement = {
             return response.json();
         })
         .then(data => {
-            alert('SSHキーが保存されました！');
+            NotificationManager.success('SSHキーが保存されました！');
             if(sshKeyFormView) sshKeyFormView.classList.add('d-none');
             if(sshKeyListView) sshKeyListView.classList.remove('d-none');
             SshKeyManagement.loadSshKeysForManagementModal();
         })
         .catch(error => {
             console.error('Error saving SSH key:', error);
-            alert('SSHキーの保存に失敗しました: ' + (error.message || JSON.stringify(error)));
+            NotificationManager.error('SSHキーの保存に失敗しました: ' + error.message);
         });
     },
 
@@ -263,7 +263,7 @@ window.SshKeyManagement = {
             })
             .catch(error => {
                 console.error('Error loading SSH keys:', error);
-                alert('SSHキーのロードに失敗しました: ' + (error.message || JSON.stringify(error)));
+                NotificationManager.error('SSHキーのロードに失敗しました: ' + error.message);
             });
     },
 
