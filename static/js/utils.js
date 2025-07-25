@@ -8,39 +8,57 @@ window.ServerDeckUtils = {
         
         // モーダルを安全に開く
         openModal: function(modalElement, options = {}) {
-            if (!modalElement) {
-                console.error('🚨 [MODAL] Modal element not found');
+            if (!modalElement || !modalElement.id) {
+                console.error('🚨 [MODAL] Modal element not found or invalid');
                 return null;
             }
             
             const modalId = modalElement.id;
             console.log(`🚪 [MODAL] Opening modal: ${modalId}`);
             
+            // DOM要素の状態を事前チェック
+            if (!document.body.contains(modalElement)) {
+                console.error(`🚨 [MODAL] Modal element ${modalId} is not in DOM`);
+                return null;
+            }
+            
             // 既存のインスタンスをクリーンアップ
             this.cleanupModal(modalElement);
             
-            // 新しいインスタンスを作成
-            const defaultOptions = {
-                backdrop: 'static',
-                keyboard: true,
-                focus: true
-            };
+            // 少し遅延を入れてDOM状態を安定化
+            setTimeout(() => {
+                // 再度要素の存在確認
+                if (!document.getElementById(modalId)) {
+                    console.error(`🚨 [MODAL] Modal element ${modalId} disappeared during setup`);
+                    return null;
+                }
+                
+                // 新しいインスタンスを作成
+                const defaultOptions = {
+                    backdrop: 'static',
+                    keyboard: true,
+                    focus: true
+                };
+                
+                const modalOptions = { ...defaultOptions, ...options };
+                
+                try {
+                    const modalInstance = new bootstrap.Modal(modalElement, modalOptions);
+                    
+                    // アクティブなモーダルとして記録
+                    this.activeModals.add(modalId);
+                    
+                    modalInstance.show();
+                    console.log(`✅ [MODAL] Modal ${modalId} opened successfully`);
+                    return modalInstance;
+                } catch (error) {
+                    console.error(`❌ [MODAL] Error opening modal ${modalId}:`, error);
+                    this.activeModals.delete(modalId);
+                    return null;
+                }
+            }, 50);
             
-            const modalOptions = { ...defaultOptions, ...options };
-            const modalInstance = new bootstrap.Modal(modalElement, modalOptions);
-            
-            // アクティブなモーダルとして記録
-            this.activeModals.add(modalId);
-            
-            try {
-                modalInstance.show();
-                console.log(`✅ [MODAL] Modal ${modalId} opened successfully`);
-                return modalInstance;
-            } catch (error) {
-                console.error(`❌ [MODAL] Error opening modal ${modalId}:`, error);
-                this.activeModals.delete(modalId);
-                return null;
-            }
+            return null; // 非同期処理のため一旦nullを返す
         },
         
         // モーダルを安全に閉じる

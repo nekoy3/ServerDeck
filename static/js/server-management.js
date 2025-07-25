@@ -76,7 +76,7 @@ window.ServerManagement = {
                 
                 if (modalInstance) {
                     // 隠れた時の処理を設定
-                    editModalElement.addEventListener('hidden.bs.modal', () => {
+                    const handleHidden = () => {
                         console.log('🔧 [EDIT] Edit modal hidden');
                         ServerDeckUtils.modalManager.cleanupModal(editModalElement);
                         
@@ -90,7 +90,36 @@ window.ServerManagement = {
                         
                         // フラグをリセット
                         delete editModalElement.dataset.savedSuccessfully;
-                    }, { once: true });
+                    };
+                    
+                    editModalElement.addEventListener('hidden.bs.modal', handleHidden, { once: true });
+                } else {
+                    // モーダルインスタンス作成に失敗した場合の代替処理
+                    console.warn('🔧 [EDIT] Failed to create modal instance, using fallback');
+                    
+                    // 直接Bootstrapモーダルを作成してみる
+                    setTimeout(() => {
+                        try {
+                            const fallbackModal = new bootstrap.Modal(editModalElement, {
+                                backdrop: 'static',
+                                keyboard: true,
+                                focus: true
+                            });
+                            fallbackModal.show();
+                            
+                            editModalElement.addEventListener('hidden.bs.modal', () => {
+                                console.log('🔧 [EDIT] Fallback edit modal hidden');
+                                if (fromConfigModal && !editModalElement.dataset.savedSuccessfully) {
+                                    setTimeout(() => {
+                                        ServerDeckUtils.openConfigModal();
+                                    }, 100);
+                                }
+                                delete editModalElement.dataset.savedSuccessfully;
+                            }, { once: true });
+                        } catch (fallbackError) {
+                            console.error('🔧 [EDIT] Fallback modal creation also failed:', fallbackError);
+                        }
+                    }, 100);
                 }
             })
             .catch(error => {
@@ -430,6 +459,16 @@ window.ServerManagement = {
             return;
         }
 
+        // セットアップボタンがクリックされた場合は何もしない（handleSetupButtonClickで処理される）
+        if (event.target.classList.contains('btn-outline-primary') && event.target.textContent.includes('セットアップ')) {
+            return;
+        }
+
+        // 確認・削除ボタンがクリックされた場合は何もしない
+        if (event.target.classList.contains('btn-success') || event.target.classList.contains('btn-danger')) {
+            return;
+        }
+
         // is_new または is_deleted のカードがクリックされた場合の特殊処理
         if (card.classList.contains('border-success')) {
             // 緑枠のカード（is_new）がクリックされた場合、編集モーダルを開く
@@ -439,12 +478,9 @@ window.ServerManagement = {
             // 赤枠のカード（is_deleted）がクリックされた場合、確認ダイアログを表示
             ExtraImport.showDeleteConfirmation(serverId, card.querySelector('.server-card-title').textContent);
         } else {
-            // 通常のカードクリックではチェックボックスをトグル
-            if (checkbox) {
-                checkbox.checked = !checkbox.checked;
-                // チェックボックスの状態変更イベントを手動で発火
-                checkbox.dispatchEvent(new Event('change'));
-            }
+            // 通常のカードクリック: 何もしない（編集ボタンと統一）
+            console.log('🔧 [CARD] Server card clicked, no action taken');
+            return;
         }
     },
 
