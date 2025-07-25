@@ -25,7 +25,7 @@ servers:
   ping_enabled: true
 - id: server-1753347563582-7348
   name: cache
-  type: node
+  type: virtual_machine
   port: '22'
   host: cache.mynk.home
   is_extra: true
