@@ -102,7 +102,7 @@
                         <button class="btn btn-sm btn-secondary cancel-delete-btn" data-id="{{ server.id }}">維持</button>
                         {% else %}
                             {% if server.type in ['node', 'virtual_machine', 'network_device', 'kvm'] and server.username %}
-                            <a href="{{ url_for('ssh_terminal', server_id=server.id) }}" class="btn btn-sm btn-success">SSH接続</a>
+                            <a href="{{ url_for('ssh_terminal', server_id=server.id) }}" class="btn btn-sm btn-primary">SSH接続</a>
                             {% endif %}
                         {% endif %}
                     </div>
