@@ -73,7 +73,20 @@
                             <p class="card-text server-card-text"><strong>ホスト:</strong> {{ server.host }}</p>
                             {% endif %}
                             {% if server.url %}
-                            <p class="card-text server-card-text"><strong>URL:</strong> <a href="{{ server.url }}" target="_blank">{{ server.url }}</a></p>
+                            <p class="card-text server-card-text">
+                                <strong>URL:</strong> 
+                                <a href="{{ server.url }}" target="_blank" class="text-decoration-none" title="{{ server.url }}">
+                                    <i class="fas fa-external-link-alt"></i>
+                                    {% if server.url|length > 30 %}
+                                        {{ server.url[:27] }}...
+                                    {% else %}
+                                        {{ server.url }}
+                                    {% endif %}
+                                </a>
+                                <button class="btn btn-sm btn-outline-secondary ms-1 p-1" onclick="copyToClipboard('{{ server.url }}')" title="URLをコピー">
+                                    <i class="fas fa-copy" style="font-size: 0.7em;"></i>
+                                </button>
+                            </p>
                             {% endif %}
                             {% if server.description %}
                             <p class="card-text server-card-text">{{ server.description }}</p>
@@ -219,6 +232,16 @@
                                 <select class="form-select" id="editServerSshKeyId" name="ssh_key_id">
                                     <!-- SSH keys will be loaded here -->
                                 </select>
+                            </div>
+                        </div>
+
+                        <!-- SSH Additional Options -->
+                        <div class="mb-3">
+                            <label for="editServerSshOptions" class="form-label">その他のSSHオプション</label>
+                            <textarea class="form-control" id="editServerSshOptions" name="ssh_options" rows="2" placeholder="例: -oHostKeyAlgorithms=+ssh-rsa -oPubkeyAcceptedAlgorithms=+ssh-rsa"></textarea>
+                            <div class="form-text">
+                                ネットワーク機器への接続時に必要な追加のSSHオプションを指定できます。
+                                <br>例: <code>-oHostKeyAlgorithms=+ssh-rsa -oPubkeyAcceptedAlgorithms=+ssh-rsa</code>
                             </div>
                         </div>
                     </div>

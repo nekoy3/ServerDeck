@@ -229,3 +229,50 @@ body {
     border-color: #007bff;
     box-shadow: 0 0 15px rgba(0, 123, 255, 0.5);
 }
+
+/* --- URL表示の改善 --- */
+.server-card-text a {
+    color: #0066cc;
+    text-decoration: none;
+    word-break: break-all;
+}
+
+.server-card-text a:hover {
+    color: #004499;
+    text-decoration: underline;
+}
+
+.dark-theme .server-card-text a {
+    color: #66b3ff;
+}
+
+.dark-theme .server-card-text a:hover {
+    color: #99ccff;
+}
+
+/* URL コピーボタンのスタイル */
+.server-card-text .btn-outline-secondary {
+    border-width: 1px;
+    font-size: 0.75rem;
+    line-height: 1;
+    padding: 0.2rem 0.4rem;
+}
+
+.server-card-text .btn-outline-secondary:hover {
+    background-color: #6c757d;
+    border-color: #6c757d;
+    color: white;
+}
+
+.dark-theme .server-card-text .btn-outline-secondary {
+    border-color: #6c757d;
+    color: #ced4da;
+}
+
+.dark-theme .server-card-text .btn-outline-secondary:hover {
+    background-color: #495057;
+    border-color: #495057;
+    color: white;
+}
+
+/* --- 既存のスタイル --- */

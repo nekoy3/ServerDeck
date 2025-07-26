@@ -1,20 +1,12 @@
 servers:
 - id: server-1753347563582-5638
   name: aruba01
-  type: network_device
-  port: '22'
+  type: node
+  port: 22
   host: aruba01.mynk.home
   is_extra: true
-  is_new: false
+  is_new: true
   ping_enabled: true
-  url: http://aruba01.mynk.home/
-  tags: ''
-  description: ''
-  auth_method: password
-  username: admin
-  password: apNeko330
-  ssh_options: ''
-  is_deleted: false
 - id: server-1753347563582-3013
   name: blog
   type: node

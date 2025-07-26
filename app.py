@@ -458,6 +458,15 @@ def index():
     servers = config.get('servers', [])
     for server in servers:
         server['display_type'] = TYPE_DISPLAY_NAMES.get(server.get('type'), '不明')
+        # URLフィールドが存在しない場合は空文字列を設定
+        if 'url' not in server:
+            server['url'] = ''
+        # tagsがない場合は空リストを設定
+        if 'tags' not in server:
+            server['tags'] = []
+        elif isinstance(server['tags'], str):
+            # tagsが文字列の場合は、カンマ区切りでリストに変換
+            server['tags'] = [tag.strip() for tag in server['tags'].split(',') if tag.strip()]
     return render_template('index.html', servers=servers)
 
 @app.route('/config')
@@ -939,6 +948,11 @@ def handle_start_ssh(data):
         username = server_info.get('username')
         password = server_info.get('password')
         ssh_key_id = server_info.get('ssh_key_id')
+        ssh_options = server_info.get('ssh_options', '')
+        
+        # SSH オプションを解析
+        ssh_connect_kwargs = parse_ssh_options(ssh_options)
+        app.logger.debug(f"SSH connection will use additional options: {ssh_connect_kwargs}")
         if ssh_key_id:
             ssh_keys_config = load_ssh_keys_config()
             ssh_key_info = next((k for k in ssh_keys_config.get('ssh_keys', []) if k['id'] == ssh_key_id), None)
@@ -958,15 +972,21 @@ def handle_start_ssh(data):
                             emit('ssh_output', {'output': f"Error loading SSH Key '{ssh_key_info['name']}': {e} (RSA) / {ed25519_e} (Ed25519)\r\n"})
                             client.close()
                             return
-                    client.connect(
-                        hostname=hostname,
-                        port=port,
-                        username=username,
-                        pkey=key,
-                        timeout=10,
-                        look_for_keys=False,
-                        allow_agent=False
-                    )
+                    # 基本的な接続パラメータ
+                    connect_params = {
+                        'hostname': hostname,
+                        'port': port,
+                        'username': username,
+                        'pkey': key,
+                        'timeout': 10,
+                        'look_for_keys': False,
+                        'allow_agent': False
+                    }
+                    
+                    # SSH オプションから得られた追加パラメータをマージ
+                    connect_params.update(ssh_connect_kwargs)
+                    
+                    client.connect(**connect_params)
                     app.logger.debug(f"SSH connected to {hostname} using key: {ssh_key_info['name']}")
                 except paramiko.PasswordRequiredException:
                     app.logger.debug(f"Key '{ssh_key_info['name']}' requires passphrase.")
@@ -985,7 +1005,19 @@ def handle_start_ssh(data):
                 return
         elif password:
             app.logger.debug(f"Attempting password authentication for {hostname}")
-            client.connect(hostname=hostname, port=port, username=username, password=password, timeout=10)
+            # 基本的な接続パラメータ
+            connect_params = {
+                'hostname': hostname,
+                'port': port,
+                'username': username,
+                'password': password,
+                'timeout': 10
+            }
+            
+            # SSH オプションから得られた追加パラメータをマージ
+            connect_params.update(ssh_connect_kwargs)
+            
+            client.connect(**connect_params)
             app.logger.debug(f"SSH connected to {hostname} using password.")
         else:
             app.logger.debug(f"No valid authentication method provided.")
@@ -1037,7 +1069,116 @@ def handle_disconnect():
         del active_ssh_sessions[sid]
         app.logger.debug(f"SSH session closed for SID: {sid}")
 
+# --- SSH Options Parser ---
+def parse_ssh_options(ssh_options_string):
+    """
+    SSH オプション文字列を解析して、Paramiko の connect() に渡す辞書を生成
+    例: "-oHostKeyAlgorithms=+ssh-rsa -oPubkeyAcceptedAlgorithms=+ssh-rsa"
+    """
+    if not ssh_options_string:
+        return {}
+    
+    connect_kwargs = {}
+    
+    # SSH オプションを分割して解析
+    options = ssh_options_string.strip().split()
+    
+    for option in options:
+        option = option.strip()
+        if not option:
+            continue
+            
+        # -o で始まるオプションを処理
+        if option.startswith('-o'):
+            # -oKEY=VALUE 形式から KEY=VALUE を抽出
+            key_value = option[2:]  # -o を除去
+            if '=' in key_value:
+                key, value = key_value.split('=', 1)
+                key = key.lower()
+                
+                # よく使用される SSH オプションを Paramiko パラメータにマッピング
+                if key == 'hostkeyalgorithms':
+                    # HostKeyAlgorithms の処理
+                    if value.startswith('+'):
+                        # +ssh-rsa のように + で始まる場合は既存に追加
+                        algorithms = value[1:].split(',')
+                        # Paramiko では disabled_algorithms を使用して制御
+                        if 'disabled_algorithms' not in connect_kwargs:
+                            connect_kwargs['disabled_algorithms'] = {}
+                        if 'keys' not in connect_kwargs['disabled_algorithms']:
+                            connect_kwargs['disabled_algorithms']['keys'] = []
+                        # ssh-rsa を無効化リストから除外（有効化）
+                        for alg in algorithms:
+                            if alg in connect_kwargs['disabled_algorithms']['keys']:
+                                connect_kwargs['disabled_algorithms']['keys'].remove(alg)
+                    else:
+                        # 直接指定の場合
+                        algorithms = value.split(',')
+                        connect_kwargs['disabled_algorithms'] = {'keys': []}
+                        # 指定されていないアルゴリズムを無効化
+                        all_algorithms = ['ssh-rsa', 'rsa-sha2-256', 'rsa-sha2-512', 'ssh-ed25519', 'ecdsa-sha2-nistp256', 'ecdsa-sha2-nistp384', 'ecdsa-sha2-nistp521']
+                        for alg in all_algorithms:
+                            if alg not in algorithms:
+                                connect_kwargs['disabled_algorithms']['keys'].append(alg)
+                
+                elif key == 'pubkeyacceptedalgorithms':
+                    # PubkeyAcceptedAlgorithms の処理（HostKeyAlgorithms と同様）
+                    if value.startswith('+'):
+                        algorithms = value[1:].split(',')
+                        if 'disabled_algorithms' not in connect_kwargs:
+                            connect_kwargs['disabled_algorithms'] = {}
+                        if 'pubkeys' not in connect_kwargs['disabled_algorithms']:
+                            connect_kwargs['disabled_algorithms']['pubkeys'] = []
+                        for alg in algorithms:
+                            if alg in connect_kwargs['disabled_algorithms']['pubkeys']:
+                                connect_kwargs['disabled_algorithms']['pubkeys'].remove(alg)
+                    else:
+                        algorithms = value.split(',')
+                        if 'disabled_algorithms' not in connect_kwargs:
+                            connect_kwargs['disabled_algorithms'] = {}
+                        connect_kwargs['disabled_algorithms']['pubkeys'] = []
+                        all_algorithms = ['ssh-rsa', 'rsa-sha2-256', 'rsa-sha2-512', 'ssh-ed25519', 'ecdsa-sha2-nistp256', 'ecdsa-sha2-nistp384', 'ecdsa-sha2-nistp521']
+                        for alg in all_algorithms:
+                            if alg not in algorithms:
+                                connect_kwargs['disabled_algorithms']['pubkeys'].append(alg)
+                
+                elif key == 'ciphers':
+                    # Ciphers の処理
+                    if value.startswith('+'):
+                        ciphers = value[1:].split(',')
+                        if 'disabled_algorithms' not in connect_kwargs:
+                            connect_kwargs['disabled_algorithms'] = {}
+                        if 'ciphers' not in connect_kwargs['disabled_algorithms']:
+                            connect_kwargs['disabled_algorithms']['ciphers'] = []
+                        for cipher in ciphers:
+                            if cipher in connect_kwargs['disabled_algorithms']['ciphers']:
+                                connect_kwargs['disabled_algorithms']['ciphers'].remove(cipher)
+                
+                elif key == 'stricthostkeychecking':
+                    # StrictHostKeyChecking の処理
+                    if value.lower() in ['no', 'false', '0']:
+                        # これは既に client.set_missing_host_key_policy(paramiko.AutoAddPolicy()) で処理済み
+                        pass
+                
+                elif key == 'userknownhostsfile':
+                    # UserKnownHostsFile の処理
+                    if value.lower() == '/dev/null':
+                        # 既知ホスト確認を無効化（AutoAddPolicy で対応済み）
+                        pass
+                
+                # その他のオプションはログに記録するが、無視
+                else:
+                    app.logger.debug(f"SSH option '{key}={value}' is not supported and will be ignored.")
+    
+    app.logger.debug(f"Parsed SSH options: {connect_kwargs}")
+    return connect_kwargs
+
 if __name__ == '__main__':
+    # Extra import のスケジュール開始
     threading.Thread(target=schedule_extra_import, daemon=True).start()
+    
+    # Ping monitoring のスケジュール開始
     threading.Thread(target=run_ping_monitoring, daemon=True).start()
-    socketio.run(app, host='0.0.0.0', debug=True, allow_unsafe_werkzeug=True, port=5001)
+    
+    # アプリケーション起動
+    socketio.run(app, host='0.0.0.0', port=5001, debug=False, allow_unsafe_werkzeug=True)

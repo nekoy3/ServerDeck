@@ -10,6 +10,7 @@ ServerDeck
 - **UIでのサーバーアクセス**: 各サーバーへのアクセスをブラウザ上で可能にするUI。
 - **動的なサーバー追加**: YAMLファイルなどを用いてサーバー情報を動的に追加・管理。
 - **ブラウザ上でのSSH接続**: WebベースのSSHクライアント機能を提供。
+- **SSH接続オプション**: ネットワーク機器や古いシステムとの接続に対応した、柔軟なSSHオプション設定。
 
 ## 技術スタック (提案)
 - **バックエンド**: Python (Flask)
@@ -41,6 +42,22 @@ python3 -m pip install -r requirements.txt
 
 アプリケーションのビルドは、Dockerイメージのビルドによって行われます。詳細については、「Dockerを使用した初期セットアップと実行」セクションの「Dockerイメージのビルド」を参照してください。
 
+**重要: 完全再構築の使用について**
+
+HTML、CSS、JavaScript、Pythonコードなどを変更した場合、**必ず`restart_full.sh`スクリプト**を使用してください。通常の`restart_app.sh`だけでは、Docker内部のキャッシュにより変更が反映されないことがあります。
+
+```bash
+./restart_full.sh
+```
+
+このスクリプトは以下の処理を行います：
+- 既存のDockerコンテナの停止・削除
+- Dockerキャッシュのクリア
+- 古いイメージの削除
+- ローカルキャッシュのクリア
+- キャッシュなしでの新しいDockerイメージのビルド
+- 新しいコンテナの起動
+
 ### テスト
 (後で追加)
 
@@ -49,6 +66,72 @@ python3 -m pip install -r requirements.txt
 
 ## コーディング規約
 (後で追加)
+
+## SSH接続オプション機能
+
+ServerDeckでは、ネットワーク機器や古いシステムとの接続において、柔軟なSSH接続オプションを設定できる機能を提供しています。
+
+### 機能概要
+
+**「その他のオプション」フィールド**を使用して、標準的なSSHクライアントの`-o`オプションと同様の設定を指定できます。これにより、以下のような接続問題を解決できます：
+
+- 古い暗号化アルゴリズムのみをサポートするネットワーク機器
+- 特定のホストキーアルゴリズムを要求するシステム
+- 厳格でないホストキー確認を必要とする環境
+
+### 使用方法
+
+サーバー編集画面の「その他のオプション」フィールドに、SSH接続オプションを入力します。
+
+**例：**
+```
+-oHostKeyAlgorithms=+ssh-rsa -oPubkeyAcceptedAlgorithms=+ssh-rsa
+```
+
+### サポートされるオプション
+
+現在、以下のSSHオプションがサポートされています：
+
+1. **HostKeyAlgorithms**: ホストキー認証で使用するアルゴリズムを指定
+   - 例: `-oHostKeyAlgorithms=+ssh-rsa`
+   - `+`プレフィックスで既存の設定に追加
+
+2. **PubkeyAcceptedAlgorithms**: 公開キー認証で受け入れるアルゴリズムを指定
+   - 例: `-oPubkeyAcceptedAlgorithms=+ssh-rsa`
+   - `+`プレフィックスで既存の設定に追加
+
+3. **Ciphers**: 暗号化アルゴリズムを指定
+   - 例: `-oCiphers=+aes128-cbc`
+
+4. **StrictHostKeyChecking**: ホストキーの厳密な確認を制御
+   - 例: `-oStrictHostKeyChecking=no`
+
+5. **UserKnownHostsFile**: 既知ホストファイルの場所を指定
+   - 例: `-oUserKnownHostsFile=/dev/null`
+
+### 実用例
+
+**古いネットワーク機器（Ciscoスイッチなど）に接続する場合：**
+```
+-oHostKeyAlgorithms=+ssh-rsa -oPubkeyAcceptedAlgorithms=+ssh-rsa -oKexAlgorithms=+diffie-hellman-group1-sha1
+```
+
+**ホストキー確認を無効にする場合：**
+```
+-oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null
+```
+
+### 技術的実装
+
+- SSH オプションは`parse_ssh_options()`関数で解析され、Paramiko ライブラリの接続パラメータに変換されます
+- サポートされていないオプションはログに記録され、無視されます
+- オプションは既存の接続設定（ホスト、ポート、認証情報）と組み合わせて使用されます
+
+### 注意事項
+
+- オプションの指定が間違っている場合、SSH接続が失敗することがあります
+- セキュリティを低下させるオプション（StrictHostKeyChecking=no など）は、必要な場合にのみ使用してください
+- サポートされていないオプションは無視されますが、ログに記録されます
 
 ## 重要なファイル/ディレクトリ
 - `app.py`: メインのFlaskアプリケーションファイル。

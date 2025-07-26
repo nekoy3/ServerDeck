@@ -157,7 +157,8 @@ window.ServerManagement = {
             'editServerType': server.type,
             'editServerUrl': server.url || '',
             'editServerDescription': server.description || '',
-            'editServerTags': server.tags ? server.tags.join(', ') : ''
+            'editServerTags': server.tags ? server.tags.join(', ') : '',
+            'editServerSshOptions': server.ssh_options || ''
         };
 
         let missingElements = [];

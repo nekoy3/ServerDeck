@@ -79,3 +79,45 @@ document.addEventListener('DOMContentLoaded', function() {
         console.error('Error during module initialization:', error);
     }
 });
+
+// クリップボードコピー機能
+function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+        // Clipboard API を使用（HTTPS環境）
+        navigator.clipboard.writeText(text).then(function() {
+            showNotification('URLをクリップボードにコピーしました', 'success');
+        }).catch(function(err) {
+            console.error('クリップボードコピーエラー:', err);
+            fallbackCopyToClipboard(text);
+        });
+    } else {
+        // フォールバック方式（HTTP環境）
+        fallbackCopyToClipboard(text);
+    }
+}
+
+// フォールバック用のクリップボードコピー
+function fallbackCopyToClipboard(text) {
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    textArea.style.position = 'fixed';
+    textArea.style.left = '-999999px';
+    textArea.style.top = '-999999px';
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    
+    try {
+        const successful = document.execCommand('copy');
+        if (successful) {
+            showNotification('URLをクリップボードにコピーしました', 'success');
+        } else {
+            showNotification('クリップボードコピーに失敗しました', 'error');
+        }
+    } catch (err) {
+        console.error('フォールバッククリップボードコピーエラー:', err);
+        showNotification('クリップボードコピーに失敗しました', 'error');
+    } finally {
+        document.body.removeChild(textArea);
+    }
+}
