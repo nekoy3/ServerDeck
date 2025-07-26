@@ -152,7 +152,8 @@ window.SshKeyManagement = {
 
     // SSHキー一括削除
     bulkDeleteSshKeys: function() {
-        const selectedKeyIds = Array.from(document.querySelectorAll('.ssh-key-checkbox:checked')).map(cb => cb.dataset.keyId);
+        const selectedKeyIds = Array.from(document.querySelectorAll('.ssh-key-checkbox:checked')).map(cb => cb.getAttribute('data-key-id'));
+        console.log('🔑 [SSH] Selected key IDs for bulk delete:', selectedKeyIds);
         if (selectedKeyIds.length > 0 && confirm(`${selectedKeyIds.length}個のSSHキーを本当に削除しますか？`)) {
             // APIManagerを使用
             if (!window.APIManager) {

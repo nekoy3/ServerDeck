@@ -94,41 +94,6 @@ servers:
   is_new: true
   ping_enabled: true
   tags: []
-- id: vm-docker-web
-  name: web-server
-  type: virtual_machine
-  port: '8080'
-  host: web.docker.mynk.home
-  is_extra: true
-  ping_enabled: true
-  url: http://web.docker.mynk.home:8080
-  tags:
-  - web
-  - docker
-  description: "Docker\u30CE\u30FC\u30C9\u4E0A\u306EWeb\u30B5\u30FC\u30D0\u30FCVM"
-  auth_method: ssh_key
-  username: webuser
-  ssh_key_id: sshkey-1752048252175
-  parent_id: server-1753347563582-5396
-  is_deleted: true
-- id: vm-docker-db
-  name: database-vm
-  type: virtual_machine
-  port: '3306'
-  host: db.docker.mynk.home
-  is_extra: true
-  ping_enabled: true
-  url: ''
-  tags:
-  - database
-  - mysql
-  description: "Docker\u30CE\u30FC\u30C9\u4E0A\u306E\u30C7\u30FC\u30BF\u30D9\u30FC\
-    \u30B9VM"
-  auth_method: password
-  username: dbadmin
-  password: password123
-  parent_id: server-1753347563582-5396
-  is_deleted: true
 - id: server-1753347563582-5711
   name: gcv
   type: node
@@ -336,7 +301,7 @@ servers:
   is_new: true
   ping_enabled: true
   tags: []
-- id: server-1753347563583-6491
+- id: server-1753557270551-8531
   name: www
   type: node
   port: 22
@@ -344,4 +309,3 @@ servers:
   is_extra: true
   is_new: true
   ping_enabled: true
-  tags: []
