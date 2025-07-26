@@ -175,7 +175,7 @@ window.APIManager = {
          */
         bulkDelete: (ids) => APIManager.request('/api/ssh_keys/bulk_delete', {
             method: 'POST',
-            body: JSON.stringify({ ssh_key_ids: ids })
+            body: JSON.stringify({ ids: ids })
         }),
         
         /**
