@@ -46,7 +46,8 @@ window.ServerManagement = {
                 });
 
                 // イベントリスナーを再アタッチ
-                this.attachServerCardEventListeners();
+                // サーバーカードの更新後、必要に応じてイベントリスナーを再設定
+                console.log('Server cards updated on main page');
             })
             .catch(error => {
                 console.error('Error updating main page server cards:', error);
@@ -90,17 +91,17 @@ window.ServerManagement = {
                                     console.log('🔧 [EDIT] Edit modal hidden');
                                     ServerDeckUtils.modalManager.cleanupModal(editModalElement);
                                     
-                                    // 設定モーダルから開いた場合のみ設定モーダルを再度開く
-                                    if (fromConfigModal && !editModalElement.dataset.savedSuccessfully) {
+                                    // 設定モーダルから開いた場合は設定モーダルを再度開く
+                                    if (fromConfigModal) {
                                         console.log('🔧 [EDIT] Reopening config modal after edit modal close');
-                                setTimeout(() => {
-                                    ServerDeckUtils.openConfigModal();
-                                }, 100);
-                            }
-                            
-                            // フラグをリセット
-                            delete editModalElement.dataset.savedSuccessfully;
-                        };
+                                        setTimeout(() => {
+                                            ServerDeckUtils.openConfigModal();
+                                        }, 200);
+                                    }
+                                    
+                                    // フラグをリセット
+                                    delete editModalElement.dataset.savedSuccessfully;
+                                };
                         
                         editModalElement.addEventListener('hidden.bs.modal', handleHidden, { once: true });
                     } else {
@@ -119,10 +120,11 @@ window.ServerManagement = {
                                 
                                 editModalElement.addEventListener('hidden.bs.modal', () => {
                                     console.log('🔧 [EDIT] Fallback edit modal hidden');
-                                    if (fromConfigModal && !editModalElement.dataset.savedSuccessfully) {
+                                    if (fromConfigModal) {
+                                        console.log('🔧 [EDIT] Reopening config modal from fallback');
                                         setTimeout(() => {
                                             ServerDeckUtils.openConfigModal();
-                                        }, 100);
+                                        }, 200);
                                     }
                                     delete editModalElement.dataset.savedSuccessfully;
                                 }, { once: true });
@@ -182,6 +184,9 @@ window.ServerManagement = {
             pingEnabledElement.checked = server.ping_enabled || false;
         }
 
+        // 親ホスト設定
+        this.setupParentHostField(server);
+
         // 認証設定
         this.setupAuthenticationFields(server);
     },
@@ -213,277 +218,71 @@ window.ServerManagement = {
         }
     },
 
-    // 設定モーダル内のサーバーリストをロードする関数
-    loadServersForConfigModal: function() {
-        APIManager.servers.getAll()
+    // 親ホストフィールドの設定
+    setupParentHostField: function(server) {
+        const parentSelect = document.getElementById('editServerParentId');
+        if (!parentSelect) return;
+
+        // 親候補となるサーバー（nodeタイプ）を取得
+        fetch('/api/servers')
+            .then(response => response.json())
             .then(servers => {
-                const serverListDiv = document.getElementById('server-list');
-                if (!serverListDiv) return;
-                serverListDiv.innerHTML = ''; // Clear existing content
-
-                servers.forEach(server => {
-                    const serverCardHtml = `
-                        <div class="col-md-4">
-                            <div class="card server-card config-server-card ${server.is_new ? 'border-success' : ''} ${server.is_deleted ? 'border-danger' : ''}" data-server-id="${server.id}">
-                                <div class="card-body server-card-body d-flex align-items-center">
-                                    <div class="form-check config-checkbox-overlay">
-                                        <input class="form-check-input config-server-checkbox" type="checkbox" value="" id="config-server-checkbox-${server.id}" data-server-id="${server.id}">
-                                    </div>
-                                    <i class="server-card-icon fas ${server.type === 'node' ? 'fa-server node' : server.type === 'virtual_machine' ? 'fa-laptop virtual_machine' : server.type === 'network_device' ? 'fa-network-wired network_device' : server.type === 'kvm' ? 'fa-boxes-stacked kvm' : 'fa-question-circle'}"></i>
-                                    <div class="server-card-info">
-                                        <h5 class="card-title server-card-title">${server.name}</h5>
-                                        <p class="card-text server-card-text"><strong>タイプ:</strong> ${server.display_type || server.type}</p>
-                                        ${server.host ? `<p class="card-text server-card-text"><strong>ホスト:</strong> ${server.host}</p>` : ''}
-                                        ${server.url ? `<p class="card-text server-card-text"><strong>URL:</strong> <a href="${server.url}" target="_blank">${server.url}</a></p>` : ''}
-                                        ${server.description ? `<p class="card-text server-card-text">${server.description}</p>` : ''}
-                                        ${server.tags && server.tags.length > 0 ? `
-                                        <div class="server-card-tags">
-                                            ${server.tags.map(tag => `<span class="badge bg-secondary">${tag}</span>`).join('')}
-                                        </div>` : ''}
-                                        <div class="d-flex align-items-center mt-2">
-                                            <div class="ping-status-box" id="ping-status-${server.id}"></div>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="card-footer server-card-footer">
-                                    <button class="btn btn-sm btn-primary edit-server-btn" data-id="${server.id}">編集</button>
-                                    <button class="btn btn-sm btn-danger delete-server-btn" data-id="${server.id}">削除</button>
-                                </div>
-                            </div>
-                        </div>
-                    `;
-                    serverListDiv.insertAdjacentHTML('beforeend', serverCardHtml);
-                });
-
-                // Pingステータスの更新をここでも呼び出す
-                PingStatus.updatePingStatus();
-
-                // 個別サーバーの編集・削除ボタン、および一括削除関連のイベントリスナーを再設定
-                this.attachServerCardEventListeners();
+                parentSelect.innerHTML = '<option value="">なし (物理サーバー・独立)</option>';
+                
+                // nodeタイプのサーバーのみを親候補として追加
+                servers
+                    .filter(s => s.type === 'node' && s.id !== server.id)
+                    .forEach(parentServer => {
+                        const option = document.createElement('option');
+                        option.value = parentServer.id;
+                        option.textContent = `${parentServer.name} (${parentServer.host || 'ホスト不明'})`;
+                        
+                        // 現在の親ホストが設定されている場合は選択
+                        if (server.parent_id === parentServer.id) {
+                            option.selected = true;
+                        }
+                        
+                        parentSelect.appendChild(option);
+                    });
             })
             .catch(error => {
-                console.error('Error loading servers for config modal:', error);
-                NotificationManager.error('サーバーリストの読み込みに失敗しました');
+                console.error('Error loading parent hosts:', error);
             });
     },
 
-    // 個別サーバーカードの編集・削除ボタンにイベントリスナーをアタッチする関数
-    attachServerCardEventListeners: function() {
-        // サーバー編集ボタンのイベントリスナー
-        document.querySelectorAll('.edit-server-btn').forEach(button => {
-            button.removeEventListener('click', this.handleEditServerClick);
-            button.addEventListener('click', this.handleEditServerClick.bind(this));
-        });
+    // 設定パネル用の親ホスト設定関数
+    setupParentHostFieldForConfig: function(server) {
+        const parentSelect = document.getElementById('parentHost');
+        if (!parentSelect) return;
 
-        // サーバー削除ボタンのイベントリスナー
-        document.querySelectorAll('.delete-server-btn').forEach(button => {
-            button.removeEventListener('click', this.handleDeleteServerClick);
-            button.addEventListener('click', this.handleDeleteServerClick.bind(this));
-        });
+        // serverがnullまたは未定義の場合は空のオブジェクトとして扱う
+        server = server || {};
 
-        // 新規サーバー設定ボタンのイベントリスナー
-        document.querySelectorAll('.setup-btn').forEach(button => {
-            button.removeEventListener('click', this.handleSetupButtonClick);
-            button.addEventListener('click', this.handleSetupButtonClick.bind(this));
-        });
-
-        // 削除確認ボタンのイベントリスナー
-        document.querySelectorAll('.confirm-delete-btn').forEach(button => {
-            button.removeEventListener('click', this.handleConfirmDeleteClick);
-            button.addEventListener('click', this.handleConfirmDeleteClick.bind(this));
-        });
-
-        // 削除キャンセルボタンのイベントリスナー
-        document.querySelectorAll('.cancel-delete-btn').forEach(button => {
-            button.removeEventListener('click', this.handleCancelDeleteClick);
-            button.addEventListener('click', this.handleCancelDeleteClick.bind(this));
-        });
-
-        // 一括削除とチェックボックス関連
-        this.attachBulkDeleteListeners();
-        this.attachConfigCardClickListeners();
-    },
-
-    // 一括削除関連のイベントリスナー
-    attachBulkDeleteListeners: function() {
-        const bulkDeleteServersBtn = document.getElementById('bulkDeleteServersBtn');
-
-        const updateBulkDeleteButtonVisibility = () => {
-            const checkedCount = document.querySelectorAll('.config-server-checkbox:checked').length;
-            if (bulkDeleteServersBtn) {
-                bulkDeleteServersBtn.disabled = checkedCount === 0;
-            }
-        };
-
-        // チェックボックスのイベントリスナーを再設定
-        document.querySelectorAll('.config-server-checkbox').forEach(checkbox => {
-            checkbox.removeEventListener('change', updateBulkDeleteButtonVisibility);
-            checkbox.addEventListener('change', updateBulkDeleteButtonVisibility);
-        });
-
-        // 一括削除ボタンのイベントリスナー
-        if (bulkDeleteServersBtn) {
-            bulkDeleteServersBtn.removeEventListener('click', this.handleBulkDeleteServersClick);
-            bulkDeleteServersBtn.addEventListener('click', this.handleBulkDeleteServersClick.bind(this));
-        }
-
-        // 初回ロード時にボタンの状態を更新
-        updateBulkDeleteButtonVisibility();
-    },
-
-    // 設定カード（緑枠・赤枠）のクリックリスナー
-    attachConfigCardClickListeners: function() {
-        document.querySelectorAll('.config-server-card').forEach(card => {
-            card.removeEventListener('click', this.handleConfigServerCardClick);
-            card.addEventListener('click', this.handleConfigServerCardClick.bind(this));
-        });
-    },
-
-    // イベントハンドラー関数群
-    handleEditServerClick: function(event) {
-        const serverId = event.target.dataset.id;
-        console.log(`🔧 [EDIT] Edit button clicked for server: ${serverId}`);
-        
-        // 設定モーダル内からクリックされた場合は設定モーダルを閉じてから編集モーダルを開く
-        const configModal = bootstrap.Modal.getInstance(document.getElementById('configModal'));
-        if (configModal) {
-            console.log('🔧 [EDIT] Closing config modal before opening edit modal');
-            configModal.hide();
-            
-            // 設定モーダルが完全に閉じられてから編集モーダルを開く
-            const configModalElement = document.getElementById('configModal');
-            configModalElement.addEventListener('hidden.bs.modal', () => {
-                console.log('🔧 [EDIT] Config modal closed, opening edit modal');
-                this.openEditModal(serverId, true); // 設定モーダルから開いたことを示すフラグ
-            }, { once: true });
-        } else {
-            // メインページから直接呼ばれた場合（設定パネルは開かない）
-            console.log('🔧 [EDIT] Opening edit modal directly from main page');
-            this.openEditModal(serverId, false);
-        }
-    },
-
-    handleDeleteServerClick: function(event) {
-        const serverId = event.target.dataset.id;
-        if (confirm('本当にこのサーバーを削除しますか？')) {
-            APIManager.servers.delete(serverId)
-                .then(() => {
-                    NotificationManager.success('サーバーが削除されました！');
-                    this.loadServersForConfigModal();
-                    this.updateMainPageServerCards();
-                })
-                .catch(error => {
-                    console.error('Error deleting server:', error);
-                    NotificationManager.error('サーバーの削除に失敗しました: ' + error.message);
-                });
-        }
-    },
-
-    handleSetupButtonClick: function(event) {
-        const serverId = event.target.dataset.id;
-        console.log(`🔧 [SETUP] Setup button clicked for server: ${serverId}`);
-        
-        const configModal = bootstrap.Modal.getInstance(document.getElementById('configModal'));
-        if (configModal) {
-            console.log('🔧 [SETUP] Closing config modal before opening edit modal');
-            configModal.hide();
-            const configModalElement = document.getElementById('configModal');
-            configModalElement.addEventListener('hidden.bs.modal', () => {
-                this.openEditModal(serverId, true);
-            }, { once: true });
-        } else {
-            this.openEditModal(serverId, false);
-        }
-    },
-
-    handleConfirmDeleteClick: function(event) {
-        const serverId = event.target.dataset.id;
-        if (confirm('このサーバーを完全に削除しますか？')) {
-            fetch(`/delete_server_permanently/${serverId}`, {
-                method: 'POST'
-            })
-            .then(response => {
-                if (!response.ok) {
-                    return response.json().then(err => { throw err; });
-                }
-                return response.json();
-            })
-            .then(data => {
-                alert('サーバーが完全に削除されました！');
-                this.loadServersForConfigModal();
+        // 親候補となるサーバー（nodeタイプ）を取得
+        fetch('/api/servers')
+            .then(response => response.json())
+            .then(servers => {
+                parentSelect.innerHTML = '<option value="">-- 選択してください（任意） --</option>';
+                
+                // nodeタイプのサーバーのみを親候補として追加
+                servers
+                    .filter(s => s.type === 'node' && s.id !== server.id)
+                    .forEach(parentServer => {
+                        const option = document.createElement('option');
+                        option.value = parentServer.id;
+                        option.textContent = `${parentServer.name} (${parentServer.host || 'ホスト不明'})`;
+                        
+                        // 現在の親ホストが設定されている場合は選択
+                        if (server.parent_id === parentServer.id) {
+                            option.selected = true;
+                        }
+                        
+                        parentSelect.appendChild(option);
+                    });
             })
             .catch(error => {
-                console.error('Error permanently deleting server:', error);
-                alert('サーバーの完全削除に失敗しました: ' + (error.message || JSON.stringify(error)));
+                console.error('Error loading parent hosts for config:', error);
             });
-        }
-    },
-
-    handleCancelDeleteClick: function(event) {
-        const serverId = event.target.dataset.id;
-        if (confirm('このサーバーの削除を取り消し、維持しますか？')) {
-            fetch(`/cancel_delete_server/${serverId}`, {
-                method: 'POST'
-            })
-            .then(response => {
-                if (!response.ok) {
-                    return response.json().then(err => { throw err; });
-                }
-                return response.json();
-            })
-            .then(data => {
-                alert('サーバーの削除が取り消されました！');
-                this.loadServersForConfigModal();
-            })
-            .catch(error => {
-                console.error('Error canceling server delete:', error);
-                alert('サーバーの削除取り消しに失敗しました: ' + (error.message || JSON.stringify(error)));
-            });
-        }
-    },
-
-    handleBulkDeleteServersClick: function() {
-        const selectedServerIds = Array.from(document.querySelectorAll('.config-server-checkbox:checked')).map(cb => cb.dataset.serverId);
-        if (selectedServerIds.length > 0 && confirm(`${selectedServerIds.length}個のサーバーを本当に削除しますか？`)) {
-            APIManager.servers.bulkDelete(selectedServerIds)
-            .then(() => {
-                NotificationManager.success('選択されたサーバーが削除されました！');
-                this.loadServersForConfigModal();
-                this.updateMainPageServerCards();
-            })
-            .catch(error => {
-                console.error('Error during bulk delete of servers:', error);
-                NotificationManager.error('サーバーの一括削除に失敗しました: ' + error.message);
-            });
-        }
-    },
-
-    handleConfigServerCardClick: function(event) {
-        const card = event.currentTarget;
-        const serverId = card.dataset.serverId;
-        const checkbox = card.querySelector('.config-server-checkbox');
-
-        // チェックボックス自体がクリックされた場合は何もしない
-        if (event.target.classList.contains('config-server-checkbox')) {
-            return;
-        }
-
-        // 任意のボタンがクリックされた場合は何もしない（各ボタンが独自のハンドラーで処理）
-        if (event.target.tagName === 'BUTTON' || event.target.closest('button')) {
-            console.log('🔧 [CARD] Button clicked, handled by specific button handler');
-            return;
-        }
-
-        // リンク（<a>タグ）がクリックされた場合は何もしない
-        if (event.target.tagName === 'A' || event.target.closest('a')) {
-            console.log('🔧 [CARD] Link clicked, allowing default behavior');
-            return;
-        }
-
-        // 🔧 設定パネルでのカードクリックは何もしない
-        // 編集は編集ボタンからのみ行う（UI統一）
-        console.log('🔧 [CARD] Config panel server card clicked, no action taken (use edit button)');
-        return;
     },
 
     // サーバー編集フォームの初期化
@@ -519,12 +318,10 @@ window.ServerManagement = {
                     NotificationManager.success('サーバー情報が更新されました！');
                     const editModalElement = document.getElementById('editServerModal');
                     
-                    // 保存成功フラグを設定（設定モーダル再表示を防ぐため）
+                    // モーダルを閉じる（設定モーダルは hidden イベントで自動的に再表示される）
                     if (editModalElement) {
-                        editModalElement.dataset.savedSuccessfully = 'true';
                         console.log('🔄 [SAVE] Server saved successfully, closing edit modal');
                         
-                        // モーダルを閉じる
                         const modalInstance = bootstrap.Modal.getInstance(editModalElement);
                         if (modalInstance) {
                             modalInstance.hide();
@@ -532,7 +329,10 @@ window.ServerManagement = {
                     }
                     
                     // データを更新
-                    this.loadServersForConfigModal();
+                    // loadServersForConfigModal は script.js で定義されているグローバル関数
+                    if (typeof loadServersForConfigModal === 'function') {
+                        loadServersForConfigModal();
+                    }
                     this.updateMainPageServerCards();
                 })
                 .catch(error => {

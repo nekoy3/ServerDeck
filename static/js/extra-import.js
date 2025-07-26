@@ -189,8 +189,12 @@ window.ExtraImport = {
             const modalInstance = bootstrap.Modal.getInstance(document.getElementById('extraImportConfirmModal'));
             if (modalInstance) modalInstance.hide();
             // 両方のビューを更新
-            ServerManagement.loadServersForConfigModal();
-            ServerManagement.updateMainPageServerCards();
+            if (typeof window.loadServersForConfigModal === 'function') {
+                window.loadServersForConfigModal();
+            }
+            if (typeof window.updateMainPageServerCards === 'function') {
+                window.updateMainPageServerCards();
+            }
         })
         .catch(error => {
             console.error('Error confirming Extra Import action:', error);
@@ -246,8 +250,12 @@ window.ExtraImport = {
             alert(data.message);
             const modalInstance = bootstrap.Modal.getInstance(document.getElementById('extraImportConfirmModal'));
             if (modalInstance) modalInstance.hide();
-            ServerManagement.loadServersForConfigModal();
-            ServerManagement.updateMainPageServerCards();
+            if (typeof window.loadServersForConfigModal === 'function') {
+                window.loadServersForConfigModal();
+            }
+            if (typeof window.updateMainPageServerCards === 'function') {
+                window.updateMainPageServerCards();
+            }
         })
         .catch(error => {
             console.error('Error confirming single server action:', error);

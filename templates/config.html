@@ -100,6 +100,12 @@
                             <label for="serverTags" class="form-label">Tags (comma separated)</label>
                             <input type="text" class="form-control" id="serverTags" name="tags">
                         </div>
+                        <div class="mb-3">
+                            <label for="parentHost" class="form-label">親ホスト</label>
+                            <select class="form-select" id="parentHost" name="parent_id">
+                                <option value="">-- 選択してください（任意） --</option>
+                            </select>
+                        </div>
                         <button type="submit" class="btn btn-primary">Save changes</button>
                     </form>
                 </div>
@@ -110,9 +116,13 @@
     <!-- Bootstrap Bundle with Popper -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     
-    <!-- ServerDeck JavaScript modules -->
-    <script src="{{ url_for('static', filename='js/utils.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/server-management.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <!-- ServerDeck JavaScript modules（依存関係順） -->
+    <script src="{{ url_for('static', filename='js/modal-utils.js') }}?v=5"></script>
+    <script src="{{ url_for('static', filename='js/api-utils.js') }}?v=5"></script>
+    <script src="{{ url_for('static', filename='js/common-utils.js') }}?v=5"></script>
+    <script src="{{ url_for('static', filename='js/config-modal.js') }}?v=5"></script>
+    <script src="{{ url_for('static', filename='js/utils.js') }}?v=5"></script>
+    <script src="{{ url_for('static', filename='js/server-management.js') }}?v=5"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}?v=5"></script>
 </body>
 </html>

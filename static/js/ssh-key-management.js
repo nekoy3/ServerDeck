@@ -1,14 +1,23 @@
 // SSHキー管理機能
 window.SshKeyManagement = {
     initialized: false,
+    isLoadingKeys: false, // キー読み込み中フラグ
     
     // 初期化
     initialize: function() {
-        // 重複初期化を防ぐ
+        console.log('🔑 [SSH] Initializing SSH key management...');
+        
+        // イベントリスナーは重複初期化を防ぐが、データ読み込みは再実行を許可
         if (this.initialized) {
-            console.log('SshKeyManagement already initialized');
-            return;
+            console.log('🔑 [SSH] Already initialized, skipping event listener setup');
+        } else {
+            this.setupEventListeners();
+            this.initialized = true;
         }
+    },
+    
+    // イベントリスナーの設定
+    setupEventListeners: function() {
         
         const sshKeyListView = document.getElementById('ssh-key-list-view');
         const sshKeyFormView = document.getElementById('ssh-key-form-view');
@@ -75,8 +84,8 @@ window.SshKeyManagement = {
             });
         }
         
-        // SSHキーリストを初回ロード
-        SshKeyManagement.loadSshKeysForManagementModal();
+        // NOTE: SSHキーリストの読み込みは設定モーダルが開かれた時のみ実行
+        // this.loadSshKeysForManagementModal(); // メイン初期化時は実行しない
 
         // SSHキーのアップロード処理
         const uploadSshKeyFileBtn = document.getElementById('uploadSshKeyFileBtn');
@@ -93,15 +102,18 @@ window.SshKeyManagement = {
             });
         }
         
-        // 初期化完了フラグ
-        this.initialized = true;
-        console.log('SshKeyManagement initialized');
+        console.log('✅ [SSH] SSH key management initialized successfully');
     },
 
     // SSHキー編集
     editSshKey: function(keyId, sshKeyIdInput, sshKeyNameInput, sshKeyPathInput, sshKeyFormTitle, sshKeyListView, sshKeyFormView) {
-        fetch(`/api/ssh_keys/${keyId}`)
-            .then(response => response.json())
+        // APIManagerを使用してSSHキー詳細を取得
+        if (!window.APIManager) {
+            console.error('❌ [SSH] APIManager not available');
+            return;
+        }
+        
+        window.APIManager.sshKeys.get(keyId)
             .then(key => {
                 if(sshKeyIdInput) sshKeyIdInput.value = key.id;
                 if(sshKeyNameInput) sshKeyNameInput.value = key.name;
@@ -111,27 +123,30 @@ window.SshKeyManagement = {
                 if(sshKeyListView) sshKeyListView.classList.add('d-none');
                 if(sshKeyFormView) sshKeyFormView.classList.remove('d-none');
             })
-            .catch(error => console.error('Error fetching SSH key for edit:', error));
+            .catch(error => {
+                console.error('Error fetching SSH key for edit:', error);
+                NotificationManager.error('SSHキーの取得に失敗しました');
+            });
     },
 
     // SSHキー削除
     deleteSshKey: function(keyId) {
         if (confirm('本当にこのSSHキーを削除しますか？')) {
-            fetch(`/api/ssh_keys/${keyId}`, {
-                method: 'DELETE'
-            })
-            .then(response => {
-                if (!response.ok) {
-                    return response.json().then(err => { throw err; });
-                }
-                if (response.status === 204) { return {}; }
-                return response.json();
-            })
+            // APIManagerを使用
+            if (!window.APIManager) {
+                console.error('❌ [SSH] APIManager not available');
+                return;
+            }
+            
+            window.APIManager.sshKeys.delete(keyId)
             .then(() => {
                 NotificationManager.success('SSHキーが削除されました！');
                 SshKeyManagement.loadSshKeysForManagementModal();
             })
-            .catch(error => console.error('Error deleting SSH key:', error));
+            .catch(error => {
+                console.error('Error deleting SSH key:', error);
+                NotificationManager.error('SSHキーの削除に失敗しました');
+            });
         }
     },
 
@@ -139,17 +154,21 @@ window.SshKeyManagement = {
     bulkDeleteSshKeys: function() {
         const selectedKeyIds = Array.from(document.querySelectorAll('.ssh-key-checkbox:checked')).map(cb => cb.dataset.keyId);
         if (selectedKeyIds.length > 0 && confirm(`${selectedKeyIds.length}個のSSHキーを本当に削除しますか？`)) {
-            fetch('/api/ssh_keys/bulk_delete', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ids: selectedKeyIds })
-            })
-            .then(response => response.ok ? response.json() : response.json().then(err => { throw err; }))
+            // APIManagerを使用
+            if (!window.APIManager) {
+                console.error('❌ [SSH] APIManager not available');
+                return;
+            }
+            
+            window.APIManager.sshKeys.bulkDelete(selectedKeyIds)
             .then(() => {
                 NotificationManager.success('選択されたSSHキーが削除されました！');
                 SshKeyManagement.loadSshKeysForManagementModal();
             })
-            .catch(error => console.error('Error during bulk delete of SSH keys:', error));
+            .catch(error => {
+                console.error('Error during bulk delete of SSH keys:', error);
+                NotificationManager.error('SSHキーの削除に失敗しました');
+            });
         }
     },
 
@@ -164,16 +183,13 @@ window.SshKeyManagement = {
         const formData = new FormData();
         formData.append('file', file);
 
-        fetch('/api/ssh_keys/upload', {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => {
-            if (!response.ok) {
-                return response.json().then(err => { throw new Error(err.error || 'Unknown error'); });
-            }
-            return response.json();
-        })
+        // APIManagerを使用
+        if (!window.APIManager) {
+            console.error('❌ [SSH] APIManager not available');
+            return;
+        }
+
+        window.APIManager.sshKeys.upload(formData)
         .then(data => {
             NotificationManager.success('SSHキーがアップロードされました！');
             if(sshKeyPathInput) sshKeyPathInput.value = data.path;
@@ -192,28 +208,23 @@ window.SshKeyManagement = {
         const keyName = sshKeyNameInput.value;
         const keyPath = sshKeyPathInput.value;
 
-        const method = keyId ? 'PUT' : 'POST';
-        const url = keyId ? `/api/ssh_keys/${keyId}` : '/api/ssh_keys';
-
         const payload = {
             id: keyId || `sshkey-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
             name: keyName,
             path: keyPath
         };
 
-        fetch(url, {
-            method: method,
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(payload)
-        })
-        .then(response => {
-            if (!response.ok) {
-                return response.json().then(err => { throw err; });
-            }
-            return response.json();
-        })
+        // APIManagerを使用
+        if (!window.APIManager) {
+            console.error('❌ [SSH] APIManager not available');
+            return;
+        }
+
+        const apiCall = keyId ? 
+            window.APIManager.sshKeys.update(keyId, payload) : 
+            window.APIManager.sshKeys.create(payload);
+
+        apiCall
         .then(data => {
             NotificationManager.success('SSHキーが保存されました！');
             if(sshKeyFormView) sshKeyFormView.classList.add('d-none');
@@ -222,26 +233,75 @@ window.SshKeyManagement = {
         })
         .catch(error => {
             console.error('Error saving SSH key:', error);
-            NotificationManager.error('SSHキーの保存に失敗しました: ' + error.message);
+            NotificationManager.error('SSHキーの保存に失敗しました: ' + (error.message || 'Unknown error'));
         });
     },
 
     // SSHキー管理モーダル用のリスト読み込み
     loadSshKeysForManagementModal: function() {
-        fetch('/api/ssh_keys')
-            .then(response => response.json())
+        console.log('🔑 [SSH] Loading SSH keys for management modal...');
+        
+        // 既に読み込み中の場合はスキップ
+        if (this.isLoadingKeys) {
+            console.log('🔑 [SSH] Already loading SSH keys, skipping...');
+            return;
+        }
+        
+        // DOM要素の存在チェック（タイミング問題対策）
+        const sshKeyListDiv = document.getElementById('ssh-key-list');
+        console.log('🔑 [SSH] ssh-key-list element check at start:', !!sshKeyListDiv);
+        
+        if (!sshKeyListDiv) {
+            console.warn('⚠️ [SSH] ssh-key-list element not found at start, waiting 100ms...');
+            // 少し待ってから再試行（最大3回）
+            if (!this.retryCount) this.retryCount = 0;
+            if (this.retryCount < 3) {
+                this.retryCount++;
+                setTimeout(() => {
+                    this.loadSshKeysForManagementModal();
+                }, 100);
+            } else {
+                console.error('❌ [SSH] ssh-key-list element not found after 3 retries');
+                this.retryCount = 0;
+            }
+            return;
+        }
+        
+        this.isLoadingKeys = true;
+        this.retryCount = 0;
+        
+        // 新しいAPIManagerを使用
+        if (!window.APIManager) {
+            console.error('❌ [SSH] APIManager not available');
+            this.isLoadingKeys = false;
+            return;
+        }
+        
+        window.APIManager.sshKeys.getAll()
             .then(sshKeys => {
+                console.log('🔑 [SSH] SSH keys received:', sshKeys.length, 'keys');
+                
+                // DOM要素を再度取得（確実性のため）
                 const sshKeyListDiv = document.getElementById('ssh-key-list');
-                if (!sshKeyListDiv) return;
+                console.log('🔑 [SSH] SSH key list element found (after API):', !!sshKeyListDiv);
+                
+                if (!sshKeyListDiv) {
+                    console.error('❌ [SSH] ssh-key-list element not found after successful API call');
+                    this.isLoadingKeys = false;
+                    return;
+                }
+                
                 sshKeyListDiv.innerHTML = '';
 
                 if (sshKeys.length === 0) {
-                    sshKeyListDiv.innerHTML = '<p>SSHキーはまだ登録されていません。</p>';
+                    console.log('🔑 [SSH] No SSH keys found, showing empty message');
+                    sshKeyListDiv.innerHTML = '<p class="text-muted">SSHキーはまだ登録されていません。</p>';
                     return;
                 }
 
                 let allKeyItemsHtml = '';
                 sshKeys.forEach(key => {
+                    console.log('🔑 [SSH] Processing SSH key:', key.name);
                     const keyItemHtml = `
                         <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
                             <div>
@@ -258,12 +318,26 @@ window.SshKeyManagement = {
                     allKeyItemsHtml += keyItemHtml;
                 });
 
+                console.log('🔑 [SSH] Setting HTML content, length:', allKeyItemsHtml.length);
                 sshKeyListDiv.innerHTML = allKeyItemsHtml;
+                
+                // 一括削除ボタンの表示状態を更新
                 SshKeyManagement.updateBulkDeleteSshKeysButtonVisibility();
+                
+                console.log('✅ [SSH] SSH keys list updated successfully');
+                
+                // 読み込み完了フラグをリセット
+                this.isLoadingKeys = false;
             })
             .catch(error => {
-                console.error('Error loading SSH keys:', error);
-                NotificationManager.error('SSHキーのロードに失敗しました: ' + error.message);
+                console.error('❌ [SSH] Error loading SSH keys:', error);
+                const sshKeyListDiv = document.getElementById('ssh-key-list');
+                if (sshKeyListDiv) {
+                    sshKeyListDiv.innerHTML = '<div class="alert alert-danger">SSH鍵の読み込みに失敗しました: ' + error.message + '</div>';
+                }
+                
+                // 読み込み完了フラグをリセット
+                this.isLoadingKeys = false;
             });
     },
 
@@ -274,5 +348,15 @@ window.SshKeyManagement = {
             const checkedCount = document.querySelectorAll('.ssh-key-checkbox:checked').length;
             bulkDeleteSshKeysBtn.disabled = checkedCount === 0;
         }
+    }
+};
+
+// グローバル関数として公開（モーダルタブ初期化用）
+window.loadSshKeysForManagementModal = function() {
+    console.log('🔑 [SSH] Global loadSshKeysForManagementModal called');
+    if (window.SshKeyManagement && typeof window.SshKeyManagement.loadSshKeysForManagementModal === 'function') {
+        window.SshKeyManagement.loadSshKeysForManagementModal();
+    } else {
+        console.error('❌ [SSH] SshKeyManagement.loadSshKeysForManagementModal not available');
     }
 };

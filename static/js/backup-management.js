@@ -4,29 +4,39 @@ window.BackupManagement = {
     
     // 初期化
     initialize: function() {
-        // 重複初期化を防ぐ
-        if (this.initialized) {
-            console.log('BackupManagement already initialized');
-            return;
-        }
+        console.log('📁 [BACKUP] Initializing backup management...');
         
-        BackupManagement.loadBackupFileList();
-        BackupManagement.initializeExportButton();
-        BackupManagement.initializeImportForm();
+        // イベントリスナーは毎回確実に設定する
+        this.setupEventListeners();
         
-        // 初期化完了フラグ
+        // 初期化フラグを設定
         this.initialized = true;
-        console.log('BackupManagement initialized');
     },
-
+    
+    // イベントリスナーの設定
+    setupEventListeners: function() {
+        console.log('📁 [BACKUP] Setting up event listeners...');
+        
+        // エクスポートボタンの初期化
+        this.initializeExportButton();
+        
+        // インポートフォームの初期化
+        this.initializeImportForm();
+        
+        console.log('✅ [BACKUP] Backup management initialized successfully');
+    },
+    
     // バックアップファイルリストの読み込み
     loadBackupFileList: function() {
+        console.log('Loading backup file list...');
+        
+        // APIManagerを使用
         if (!window.APIManager) {
-            console.error('APIManager not available');
+            console.error('❌ [BACKUP] APIManager not available');
             return;
         }
         
-        window.APIManager.get('/api/backups')
+        window.APIManager.backup.getAll()
             .then(backupFiles => {
                 const backupFileListDiv = document.getElementById('backup-file-list');
                 if (!backupFileListDiv) return;
@@ -72,21 +82,46 @@ window.BackupManagement = {
 
     // エクスポートボタンの初期化
     initializeExportButton: function() {
+        console.log('📁 [BACKUP] Initializing export button...');
         const exportBtn = document.getElementById('export-config-btn');
         if (exportBtn) {
-            exportBtn.addEventListener('click', () => {
+            console.log('📁 [BACKUP] Export button found, adding event listener');
+            
+            // 既存のイベントリスナーがあれば削除
+            exportBtn.removeEventListener('click', this._exportHandler);
+            
+            // 新しいイベントリスナーを追加
+            this._exportHandler = () => {
+                console.log('📁 [BACKUP] Export button clicked!');
                 BackupManagement.exportConfig();
-            });
+            };
+            exportBtn.addEventListener('click', this._exportHandler);
+            
+            console.log('✅ [BACKUP] Export button event listener added successfully');
+        } else {
+            console.warn('⚠️ [BACKUP] Export button not found (expected when config modal is not open)');
         }
     },
 
     // インポートフォームの初期化
     initializeImportForm: function() {
+        console.log('📁 [BACKUP] Initializing import form...');
         const importForm = document.getElementById('import-form');
         if (importForm) {
-            importForm.addEventListener('submit', (e) => {
+            console.log('📁 [BACKUP] Import form found, adding event listener');
+            
+            // 既存のイベントリスナーがあれば削除
+            importForm.removeEventListener('submit', this._importHandler);
+            
+            // 新しいイベントリスナーを追加
+            this._importHandler = (e) => {
                 BackupManagement.importConfig(e);
-            });
+            };
+            importForm.addEventListener('submit', this._importHandler);
+            
+            console.log('✅ [BACKUP] Import form event listener added successfully');
+        } else {
+            console.warn('⚠️ [BACKUP] Import form not found (expected when config modal is not open)');
         }
     },
 
@@ -113,40 +148,47 @@ window.BackupManagement = {
 
     // 設定のエクスポート
     exportConfig: function() {
-        if (!window.APIManager) {
-            console.error('APIManager not available');
-            return;
-        }
+        console.log('📁 [BACKUP] Starting config export...');
         
-        window.APIManager.get('/api/config/export', {
-            responseType: 'blob'
-        })
-        .then(blob => {
-            // ファイルダウンロード
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `serverdeck_backup_${new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5)}.yaml`;
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
-            
-            if (window.NotificationManager) {
-                window.NotificationManager.success('設定がエクスポートされました！');
-            } else {
-                alert('設定がエクスポートされました！');
-            }
-            this.loadBackupFileList(); // リストを更新
-        })
-        .catch(error => {
-            console.error('Error exporting config:', error);
-            if (window.NotificationManager) {
-                window.NotificationManager.error('設定のエクスポートに失敗しました。');
-            } else {
-                alert('設定のエクスポートに失敗しました。');
-            }
-        });
+        console.log('📁 [BACKUP] Calling fetch for /api/config/export...');
+        
+        // 直接fetchを使用してBlobレスポンスを取得
+        fetch('/api/config/export')
+            .then(response => {
+                console.log('📁 [BACKUP] Export API response received:', response);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                return response.blob();
+            })
+            .then(blob => {
+                console.log('📁 [BACKUP] Export blob received, creating download...');
+                // ファイルダウンロード
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `serverdeck_backup_${new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5)}.yaml`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+                
+                console.log('✅ [BACKUP] Export completed successfully');
+                if (window.NotificationManager) {
+                    window.NotificationManager.success('設定がエクスポートされました！');
+                } else {
+                    alert('設定がエクスポートされました！');
+                }
+                this.loadBackupFileList(); // リストを更新
+            })
+            .catch(error => {
+                console.error('❌ [BACKUP] Error exporting config:', error);
+                if (window.NotificationManager) {
+                    window.NotificationManager.error('設定のエクスポートに失敗しました。');
+                } else {
+                    alert('設定のエクスポートに失敗しました。');
+                }
+            });
     },
 
     // 設定のインポート
@@ -167,12 +209,19 @@ window.BackupManagement = {
         const formData = new FormData();
         formData.append('file', file);
 
+        // APIManagerを使用
         if (!window.APIManager) {
-            console.error('APIManager not available');
+            console.error('❌ [BACKUP] APIManager not available');
             return;
         }
-
-        window.APIManager.post('/api/config/import', formData)
+        
+        window.APIManager.backup.import(formData)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            return response.json();
+        })
         .then(data => {
             if (window.NotificationManager) {
                 window.NotificationManager.success('設定がインポートされました！ページを再読み込みしてください。');
@@ -181,9 +230,11 @@ window.BackupManagement = {
             }
             fileInput.value = '';
             // サーバーリストを更新
-            if (typeof ServerManagement !== 'undefined') {
-                ServerManagement.loadServersForConfigModal();
-                ServerManagement.updateMainPageServerCards();
+            if (typeof window.loadServersForConfigModal === 'function') {
+                window.loadServersForConfigModal();
+            }
+            if (typeof window.updateMainPageServerCards === 'function') {
+                window.updateMainPageServerCards();
             }
         })
         .catch(error => {
@@ -208,12 +259,19 @@ window.BackupManagement = {
 
     // バックアップの削除
     deleteBackup: function(filename) {
+        // APIManagerを使用
         if (!window.APIManager) {
-            console.error('APIManager not available');
+            console.error('❌ [BACKUP] APIManager not available');
             return;
         }
         
-        window.APIManager.delete(`/api/backups/delete/${encodeURIComponent(filename)}`)
+        window.APIManager.backup.delete(filename)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            return response.json();
+        })
         .then(data => {
             if (window.NotificationManager) {
                 window.NotificationManager.success('バックアップファイルが削除されました。');

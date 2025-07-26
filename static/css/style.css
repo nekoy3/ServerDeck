@@ -275,4 +275,32 @@ body {
     color: white;
 }
 
+/* --- 階層表示用のスタイル --- */
+.child-server-card {
+    margin-left: 20px;
+    border-left: 3px solid #6c757d;
+}
+
+.dark-theme .child-server-card {
+    border-left-color: #ced4da;
+}
+
+.hierarchy-indicator {
+    color: var(--text-color-secondary);
+}
+
+.child-server-card .server-card-icon {
+    font-size: 0.9em;
+    opacity: 0.8;
+}
+
+/* 親サーバーの子VM数表示 */
+.server-card-title small.text-success {
+    font-weight: normal;
+}
+
+.server-card-title small.text-muted {
+    font-weight: normal;
+}
+
 /* --- 既存のスタイル --- */

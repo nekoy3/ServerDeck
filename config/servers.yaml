@@ -8,7 +8,7 @@ servers:
   is_new: false
   ping_enabled: true
   url: http://aruba01.mynk.home/
-  tags: ''
+  tags: []
   description: ''
   auth_method: password
   username: admin
@@ -23,6 +23,7 @@ servers:
   is_extra: true
   is_new: true
   ping_enabled: true
+  tags: []
 - id: server-1753347563582-1376
   name: box
   type: node
@@ -31,6 +32,7 @@ servers:
   is_extra: true
   is_new: true
   ping_enabled: true
+  tags: []
 - id: server-1753347563582-7348
   name: cache
   type: virtual_machine
@@ -40,11 +42,12 @@ servers:
   is_new: false
   ping_enabled: true
   url: ''
-  tags: ''
+  tags: []
   description: ''
   auth_method: ssh_key
   username: nekoy
   ssh_key_id: sshkey-1752048252175
+  parent_id: server-1753347563582-5396
   is_deleted: false
 - id: server-1753347563582-4140
   name: db
@@ -54,6 +57,7 @@ servers:
   is_extra: true
   is_new: true
   ping_enabled: true
+  tags: []
 - id: server-1753347563582-4273
   name: deploy
   type: node
@@ -62,6 +66,7 @@ servers:
   is_extra: true
   is_new: true
   ping_enabled: true
+  tags: []
 - id: server-1753347563582-2792
   name: dhcp
   type: node
@@ -70,6 +75,7 @@ servers:
   is_extra: true
   is_new: true
   ping_enabled: true
+  tags: []
 - id: server-1753347563582-3790
   name: dns
   type: node
@@ -78,6 +84,7 @@ servers:
   is_extra: true
   is_new: true
   ping_enabled: true
+  tags: []
 - id: server-1753347563582-5396
   name: docker
   type: node
@@ -86,6 +93,42 @@ servers:
   is_extra: true
   is_new: true
   ping_enabled: true
+  tags: []
+- id: vm-docker-web
+  name: web-server
+  type: virtual_machine
+  port: '8080'
+  host: web.docker.mynk.home
+  is_extra: true
+  ping_enabled: true
+  url: http://web.docker.mynk.home:8080
+  tags:
+  - web
+  - docker
+  description: "Docker\u30CE\u30FC\u30C9\u4E0A\u306EWeb\u30B5\u30FC\u30D0\u30FCVM"
+  auth_method: ssh_key
+  username: webuser
+  ssh_key_id: sshkey-1752048252175
+  parent_id: server-1753347563582-5396
+  is_deleted: true
+- id: vm-docker-db
+  name: database-vm
+  type: virtual_machine
+  port: '3306'
+  host: db.docker.mynk.home
+  is_extra: true
+  ping_enabled: true
+  url: ''
+  tags:
+  - database
+  - mysql
+  description: "Docker\u30CE\u30FC\u30C9\u4E0A\u306E\u30C7\u30FC\u30BF\u30D9\u30FC\
+    \u30B9VM"
+  auth_method: password
+  username: dbadmin
+  password: password123
+  parent_id: server-1753347563582-5396
+  is_deleted: true
 - id: server-1753347563582-5711
   name: gcv
   type: node
@@ -94,6 +137,7 @@ servers:
   is_extra: true
   is_new: true
   ping_enabled: true
+  tags: []
 - id: server-1753347563582-2363
   name: go-flow
   type: node
@@ -102,6 +146,7 @@ servers:
   is_extra: true
   is_new: true
   ping_enabled: true
+  tags: []
 - id: server-1753347563583-8303
   name: gw
   type: node
@@ -110,6 +155,7 @@ servers:
   is_extra: true
   is_new: true
   ping_enabled: true
+  tags: []
 - id: server-1753347563583-2450
   name: haos
   type: node
@@ -118,6 +164,7 @@ servers:
   is_extra: true
   is_new: true
   ping_enabled: true
+  tags: []
 - id: server-1753347563583-8767
   name: imm
   type: node
@@ -126,6 +173,7 @@ servers:
   is_extra: true
   is_new: true
   ping_enabled: true
+  tags: []
 - id: server-1753347563583-4542
   name: ipmi
   type: node
@@ -134,6 +182,7 @@ servers:
   is_extra: true
   is_new: true
   ping_enabled: true
+  tags: []
 - id: server-1753347563583-3226
   name: kibana
   type: node
@@ -142,6 +191,7 @@ servers:
   is_extra: true
   is_new: true
   ping_enabled: true
+  tags: []
 - id: server-1753347563583-1023
   name: kuma
   type: node
@@ -150,6 +200,7 @@ servers:
   is_extra: true
   is_new: true
   ping_enabled: true
+  tags: []
 - id: server-1753347563583-5143
   name: l2sw-1
   type: node
@@ -158,6 +209,7 @@ servers:
   is_extra: true
   is_new: true
   ping_enabled: true
+  tags: []
 - id: server-1753347563583-3232
   name: nas
   type: node
@@ -166,6 +218,7 @@ servers:
   is_extra: true
   is_new: true
   ping_enabled: true
+  tags: []
 - id: server-1753347563583-6950
   name: nas-share
   type: node
@@ -174,6 +227,7 @@ servers:
   is_extra: true
   is_new: true
   ping_enabled: true
+  tags: []
 - id: server-1753347563583-6674
   name: ns
   type: node
@@ -182,6 +236,7 @@ servers:
   is_extra: true
   is_new: true
   ping_enabled: true
+  tags: []
 - id: server-1753347563583-6192
   name: obsrv
   type: node
@@ -190,6 +245,7 @@ servers:
   is_extra: true
   is_new: true
   ping_enabled: true
+  tags: []
 - id: server-1753347563583-5259
   name: proxy
   type: node
@@ -198,6 +254,7 @@ servers:
   is_extra: true
   is_new: true
   ping_enabled: true
+  tags: []
 - id: server-1753347563583-3287
   name: pve01
   type: node
@@ -206,6 +263,7 @@ servers:
   is_extra: true
   is_new: true
   ping_enabled: true
+  tags: []
 - id: server-1753347563583-9677
   name: pve03
   type: node
@@ -214,6 +272,7 @@ servers:
   is_extra: true
   is_new: true
   ping_enabled: true
+  tags: []
 - id: server-1753347563583-2862
   name: pve04
   type: node
@@ -222,6 +281,7 @@ servers:
   is_extra: true
   is_new: true
   ping_enabled: true
+  tags: []
 - id: server-1753347563583-3526
   name: radius
   type: node
@@ -230,6 +290,7 @@ servers:
   is_extra: true
   is_new: true
   ping_enabled: true
+  tags: []
 - id: server-1753347563583-5443
   name: raspi
   type: node
@@ -238,6 +299,7 @@ servers:
   is_extra: true
   is_new: true
   ping_enabled: true
+  tags: []
 - id: server-1753347563583-7650
   name: raspi2
   type: node
@@ -246,6 +308,7 @@ servers:
   is_extra: true
   is_new: true
   ping_enabled: true
+  tags: []
 - id: server-1753347563583-5754
   name: srv
   type: node
@@ -254,6 +317,7 @@ servers:
   is_extra: true
   is_new: true
   ping_enabled: true
+  tags: []
 - id: server-1753347563583-2310
   name: tsvpn
   type: node
@@ -262,6 +326,7 @@ servers:
   is_extra: true
   is_new: true
   ping_enabled: true
+  tags: []
 - id: server-1753347563583-8025
   name: ups
   type: node
@@ -270,6 +335,7 @@ servers:
   is_extra: true
   is_new: true
   ping_enabled: true
+  tags: []
 - id: server-1753347563583-6491
   name: www
   type: node
@@ -278,3 +344,4 @@ servers:
   is_extra: true
   is_new: true
   ping_enabled: true
+  tags: []

@@ -13,14 +13,21 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     
     <!-- Custom JavaScript Modules --> 
-    <script src="{{ url_for('static', filename='js/notification.js') }}?v=4"></script>
-    <script src="{{ url_for('static', filename='js/utils.js') }}?v=4"></script>
-    <script src="{{ url_for('static', filename='js/ping-status.js') }}?v=4"></script>
-    <script src="{{ url_for('static', filename='js/server-management.js') }}?v=4"></script>
-    <script src="{{ url_for('static', filename='js/ssh-key-management.js') }}?v=4"></script>
-    <script src="{{ url_for('static', filename='js/extra-import.js') }}?v=4"></script>
-    <script src="{{ url_for('static', filename='js/backup-management.js') }}?v=4"></script>
-    <script src="{{ url_for('static', filename='js/main.js') }}?v=4"></script>
+    <script src="{{ url_for('static', filename='js/notification.js') }}?v=5"></script>
+    <!-- ユーティリティモジュール群（依存関係順に読み込み） -->
+    <script src="{{ url_for('static', filename='js/modal-utils.js') }}?v=5"></script>
+    <script src="{{ url_for('static', filename='js/api-utils.js') }}?v=5"></script>
+    <script src="{{ url_for('static', filename='js/common-utils.js') }}?v=5"></script>
+    <script src="{{ url_for('static', filename='js/config-modal.js') }}?v=5"></script>
+    <script src="{{ url_for('static', filename='js/utils.js') }}?v=5"></script>
+    <!-- 機能別モジュール -->
+    <script src="{{ url_for('static', filename='js/script.js') }}?v=5"></script>
+    <script src="{{ url_for('static', filename='js/ping-status.js') }}?v=5"></script>
+    <script src="{{ url_for('static', filename='js/server-management.js') }}?v=5"></script>
+    <script src="{{ url_for('static', filename='js/ssh-key-management.js') }}?v=5"></script>
+    <script src="{{ url_for('static', filename='js/extra-import.js') }}?v=5"></script>
+    <script src="{{ url_for('static', filename='js/backup-management.js') }}?v=5"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}?v=5"></script>
 </head>
 <body id="theme-body">
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
@@ -63,11 +70,23 @@
         <div class="row">
             {% for server in servers %}
             <div class="col-md-4">
-                <div class="card server-card {% if server.is_extra and server.is_new %}border-success{% elif server.is_extra and server.is_deleted %}border-danger{% endif %}" data-server-id="{{ server.id }}">
+                <div class="card server-card {% if server.is_extra and server.is_new %}border-success{% elif server.is_extra and server.is_deleted %}border-danger{% endif %}{% if server.parent_id %} child-server-card{% endif %}" data-server-id="{{ server.id }}" data-parent-id="{{ server.parent_id or '' }}">
                     <div class="card-body server-card-body d-flex align-items-center">
+                        {% if server.parent_id %}
+                        <div class="hierarchy-indicator">
+                            <i class="fas fa-arrow-right text-muted me-2"></i>
+                        </div>
+                        {% endif %}
                         <i class="server-card-icon fas {% if server.type == 'node' %}fa-server node{% elif server.type == 'virtual_machine' %}fa-laptop virtual_machine{% elif server.type == 'network_device' %}fa-network-wired network_device{% elif server.type == 'kvm' %}fa-boxes-stacked kvm{% else %}fa-question-circle{% endif %}"></i>
                         <div class="server-card-info">
-                            <h5 class="card-title server-card-title">{{ server.name }}</h5>
+                            <h5 class="card-title server-card-title">
+                                {{ server.name }}
+                                {% if server.parent_id %}
+                                <small class="text-muted">(VM)</small>
+                                {% elif server.children and server.children|length > 0 %}
+                                <small class="text-success">({{ server.children|length }} VM)</small>
+                                {% endif %}
+                            </h5>
                             <p class="card-text server-card-text"><strong>タイプ:</strong> {{ server.display_type }}</p>
                             {% if server.host %}
                             <p class="card-text server-card-text"><strong>ホスト:</strong> {{ server.host }}</p>
@@ -147,14 +166,6 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <!-- Socket.IO Client -->
     <script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.8.1/dist/socket.io.min.js"></script>
-    <!-- Custom JavaScript Modules -->
-    <script src="{{ url_for('static', filename='js/utils.js') }}?v=3"></script>
-    <script src="{{ url_for('static', filename='js/ping-status.js') }}?v=3"></script>
-    <script src="{{ url_for('static', filename='js/server-management.js') }}?v=3"></script>
-    <script src="{{ url_for('static', filename='js/ssh-key-management.js') }}?v=3"></script>
-    <script src="{{ url_for('static', filename='js/extra-import.js') }}?v=3"></script>
-    <script src="{{ url_for('static', filename='js/backup-management.js') }}?v=3"></script>
-    <script src="{{ url_for('static', filename='js/main.js') }}?v=3"></script>
     <!-- Server Edit/Add Modal -->
     <div class="modal fade" id="editServerModal" tabindex="-1" aria-labelledby="editServerModalLabel" aria-hidden="true">
         <div class="modal-dialog">
@@ -202,6 +213,14 @@
                         <div class="mb-3 form-check form-switch">
                             <input class="form-check-input" type="checkbox" id="editPingEnabled" name="ping_enabled">
                             <label class="form-check-label" for="editPingEnabled">Ping監視を有効にする</label>
+                        </div>
+                        <div class="mb-3" id="editParentHostGroup">
+                            <label for="editServerParentId" class="form-label">親ホスト (仮想マシンの場合)</label>
+                            <select class="form-select" id="editServerParentId" name="parent_id">
+                                <option value="">なし (物理サーバー・独立)</option>
+                                <!-- 親候補は JavaScript で動的に追加 -->
+                            </select>
+                            <div class="form-text">仮想マシンの場合、実行されている物理ホストを選択してください。</div>
                         </div>
                         <div class="mb-3">
                             <label for="editAuthMethod" class="form-label">認証方法</label>
@@ -304,6 +323,29 @@
                         <button type="submit" class="btn btn-primary">保存</button>
                         <button type="button" class="btn btn-secondary" id="cancelSshKeyEditBtn" style="display:none;">キャンセル</button>
                     </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Extra Import Confirmation Modal -->
+    <div class="modal fade" id="extraImportConfirmModal" tabindex="-1" aria-labelledby="extraImportConfirmModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="extraImportConfirmModalLabel">Extra Import URL変更の確認</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Extra ImportのURLが変更されました。以前のURLでインポートされたサーバーの扱いを選択してください。</p>
+                    <p><strong>削除:</strong> 以前のURLでインポートされたサーバーをすべて削除します。</p>
+                    <p><strong>維持:</strong> 以前のURLでインポートされたサーバーを通常のサーバーとして維持し、Extra Importの管理対象から外します。</p>
+                    <p><strong>キャンセル:</strong> URLの変更をキャンセルし、以前のURLに戻します。</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-danger" id="extraImportConfirmDeleteBtn">削除</button>
+                    <button type="button" class="btn btn-secondary" id="extraImportConfirmKeepBtn">維持</button>
+                    <button type="button" class="btn btn-light" id="extraImportConfirmCancelBtn">キャンセル</button>
                 </div>
             </div>
         </div>

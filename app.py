@@ -141,6 +141,17 @@ def load_servers_config():
                     server['ping_enabled'] = True
                 if 'is_extra' not in server:
                     server['is_extra'] = False
+                # tagsフィールドの正規化
+                if 'tags' in server:
+                    if isinstance(server['tags'], str):
+                        if server['tags'].strip():
+                            server['tags'] = [tag.strip() for tag in server['tags'].split(',')]
+                        else:
+                            server['tags'] = []
+                    elif not isinstance(server['tags'], list):
+                        server['tags'] = []
+                else:
+                    server['tags'] = []
                 
             return config
     return {"servers": []}
@@ -456,6 +467,8 @@ def modal_test():
 def index():
     config = load_servers_config()
     servers = config.get('servers', [])
+    
+    # サーバー情報の前処理
     for server in servers:
         server['display_type'] = TYPE_DISPLAY_NAMES.get(server.get('type'), '不明')
         # URLフィールドが存在しない場合は空文字列を設定
@@ -467,7 +480,11 @@ def index():
         elif isinstance(server['tags'], str):
             # tagsが文字列の場合は、カンマ区切りでリストに変換
             server['tags'] = [tag.strip() for tag in server['tags'].split(',') if tag.strip()]
-    return render_template('index.html', servers=servers)
+    
+    # 階層構造のためのサーバー整理
+    organized_servers = organize_servers_hierarchy(servers)
+    
+    return render_template('index.html', servers=organized_servers)
 
 @app.route('/config')
 @login_required
@@ -509,6 +526,19 @@ def add_server():
     new_server = request.json
     if not new_server or 'id' not in new_server or 'name' not in new_server or 'type' not in new_server:
         return jsonify({"error": "Missing required fields (id, name, type)"}), 400
+    
+    # tagsフィールドの正規化
+    if 'tags' in new_server:
+        if isinstance(new_server['tags'], str):
+            if new_server['tags'].strip():
+                new_server['tags'] = [tag.strip() for tag in new_server['tags'].split(',')]
+            else:
+                new_server['tags'] = []
+        elif not isinstance(new_server['tags'], list):
+            new_server['tags'] = []
+    else:
+        new_server['tags'] = []
+    
     config = load_servers_config()
     servers = config.get('servers', [])
     if any(s['id'] == new_server['id'] for s in servers):
@@ -521,6 +551,16 @@ def add_server():
 @login_required
 def update_server(server_id):
     updated_data = request.json
+    # tagsフィールドの正規化
+    if 'tags' in updated_data:
+        if isinstance(updated_data['tags'], str):
+            if updated_data['tags'].strip():
+                updated_data['tags'] = [tag.strip() for tag in updated_data['tags'].split(',')]
+            else:
+                updated_data['tags'] = []
+        elif not isinstance(updated_data['tags'], list):
+            updated_data['tags'] = []
+    
     config = load_servers_config()
     servers = config.get('servers', [])
     found = False
@@ -1172,6 +1212,53 @@ def parse_ssh_options(ssh_options_string):
     
     app.logger.debug(f"Parsed SSH options: {connect_kwargs}")
     return connect_kwargs
+
+def organize_servers_hierarchy(servers):
+    """
+    サーバーを階層構造に整理する
+    親ノード -> 子VM の順序で並び替え、親がない場合は最初に配置
+    """
+    # サーバーをIDでインデックス化
+    servers_by_id = {server['id']: server for server in servers}
+    
+    # 親子関係を構築
+    for server in servers:
+        server['children'] = []
+        parent_id = server.get('parent_id')
+        if parent_id and parent_id in servers_by_id:
+            server['parent'] = servers_by_id[parent_id]
+        else:
+            server['parent'] = None
+
+    # 子サーバーを親に追加
+    for server in servers:
+        parent_id = server.get('parent_id')
+        if parent_id and parent_id in servers_by_id:
+            servers_by_id[parent_id]['children'].append(server)
+    
+    # 階層構造で整理（親 -> 子の順序）
+    organized = []
+    processed = set()
+    
+    # まず親サーバー（parent_idがないもの）を追加
+    for server in servers:
+        if not server.get('parent_id') and server['id'] not in processed:
+            organized.append(server)
+            processed.add(server['id'])
+            
+            # 子サーバーを追加
+            for child in server.get('children', []):
+                if child['id'] not in processed:
+                    organized.append(child)
+                    processed.add(child['id'])
+    
+    # 親が見つからない子サーバーがあれば最後に追加
+    for server in servers:
+        if server['id'] not in processed:
+            organized.append(server)
+            processed.add(server['id'])
+    
+    return organized
 
 if __name__ == '__main__':
     # Extra import のスケジュール開始

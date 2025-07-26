@@ -12,8 +12,12 @@ window.PingStatus = {
 
         this.socket.on('extra_import_finished', () => {
             console.log('Received extra_import_finished event. Reloading servers.');
-            ServerManagement.loadServersForConfigModal();
-            ServerManagement.updateMainPageServerCards();
+            if (typeof window.loadServersForConfigModal === 'function') {
+                window.loadServersForConfigModal();
+            }
+            if (typeof window.updateMainPageServerCards === 'function') {
+                window.updateMainPageServerCards();
+            }
         });
 
         // 初回ロード時にPingステータスを更新
