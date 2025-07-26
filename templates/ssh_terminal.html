@@ -17,20 +17,78 @@
             width: 100vw;
             height: 100vh;
             display: flex;
+            flex-direction: column;
             justify-content: center;
             align-items: center;
         }
+        #connection-status {
+            width: 90%;
+            background-color: #21252b;
+            padding: 15px;
+            margin-bottom: 10px;
+            box-sizing: border-box;
+            border-radius: 8px;
+            border: 1px solid #3e4451;
+            display: none;
+        }
+        #connection-status.show {
+            display: block;
+        }
+        .status-header {
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #61dafb;
+        }
+        .status-message {
+            margin-bottom: 10px;
+            color: #abb2bf;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background-color: #3e4451;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #61dafb, #98c379);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        .status-connecting .progress-fill {
+            background: linear-gradient(90deg, #61dafb, #56b6c2);
+        }
+        .status-authenticating .progress-fill {
+            background: linear-gradient(90deg, #e06c75, #d19a66);
+        }
+        .status-connected .progress-fill {
+            background: linear-gradient(90deg, #98c379, #56b6c2);
+        }
+        .status-error .progress-fill {
+            background: linear-gradient(90deg, #e06c75, #be5046);
+        }
         #terminal {
             width: 90%;
-            height: 90%;
+            height: 85%;
             background-color: #21252b;
             padding: 10px;
             box-sizing: border-box;
+            border-radius: 8px;
+            border: 1px solid #3e4451;
         }
     </style>
 </head>
 <body>
     <div id="terminal-container">
+        <div id="connection-status">
+            <div class="status-header">SSH接続状態</div>
+            <div class="status-message" id="status-message">接続中...</div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progress-fill"></div>
+            </div>
+        </div>
         <div id="terminal"></div>
     </div>
 
@@ -40,6 +98,10 @@
     <script>
         const serverId = "{{ server_id }}";
         const terminalContainer = document.getElementById('terminal');
+        const connectionStatus = document.getElementById('connection-status');
+        const statusMessage = document.getElementById('status-message');
+        const progressFill = document.getElementById('progress-fill');
+        
         const term = new Terminal();
         const fitAddon = new FitAddon.FitAddon();
         term.loadAddon(fitAddon);
@@ -48,8 +110,24 @@
 
         const socket = io();
 
+        // SSH状態の更新を処理
+        socket.on('ssh_status_update', (data) => {
+            console.log('SSH Status Update:', data);
+            connectionStatus.className = 'show status-' + data.status;
+            statusMessage.textContent = data.message;
+            progressFill.style.width = data.progress + '%';
+            
+            // 接続完了時は状態表示を非表示にする
+            if (data.status === 'connected') {
+                setTimeout(() => {
+                    connectionStatus.classList.remove('show');
+                }, 2000);
+            }
+        });
+
         socket.on('connect', () => {
             console.log('Connected to WebSocket');
+            connectionStatus.classList.add('show');
             socket.emit('start_ssh', { server_id: serverId });
         });
 
@@ -69,6 +147,9 @@
         socket.on('disconnect', () => {
             console.log('Disconnected from WebSocket');
             term.write('\r\nDisconnected from server.\r\n');
+            connectionStatus.className = 'show status-error';
+            statusMessage.textContent = 'サーバーから切断されました';
+            progressFill.style.width = '0%';
         });
 
         term.focus();

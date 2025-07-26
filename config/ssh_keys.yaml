@@ -1,4 +1,0 @@
-ssh_keys:
-- id: sshkey-1752048252175
-  name: vm_machines
-  path: /Users/nekoy/ServerDeck/config/uploaded_ssh_keys/id_vm_machines
