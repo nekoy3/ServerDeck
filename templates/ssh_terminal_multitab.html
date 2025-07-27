@@ -168,6 +168,85 @@
             overflow: hidden;
         }
         
+        /* 分割画面用のコンテナ */
+        .split-container {
+            display: flex;
+            width: 100%;
+            height: 100%;
+        }
+        
+        .split-container.horizontal {
+            flex-direction: column;
+        }
+        
+        .split-container.vertical {
+            flex-direction: row;
+        }
+        
+        .split-pane {
+            flex: 1;
+            position: relative;
+            min-width: 200px;
+            min-height: 150px;
+        }
+        
+        .split-pane:not(:last-child) {
+            border-right: 2px solid #3e4451;
+        }
+        
+        .split-container.horizontal .split-pane:not(:last-child) {
+            border-right: none;
+            border-bottom: 2px solid #3e4451;
+        }
+        
+        .split-resizer {
+            background-color: #3e4451;
+            cursor: col-resize;
+            width: 4px;
+            position: relative;
+            z-index: 10;
+        }
+        
+        .split-resizer:hover {
+            background-color: #61dafb;
+        }
+        
+        .split-container.horizontal .split-resizer {
+            cursor: row-resize;
+            width: 100%;
+            height: 4px;
+        }
+        
+        .split-pane-header {
+            background-color: #21252b;
+            border-bottom: 1px solid #3e4451;
+            padding: 5px 10px;
+            font-size: 12px;
+            color: #abb2bf;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .split-pane-title {
+            font-weight: 500;
+        }
+        
+        .split-pane-close {
+            background: none;
+            border: none;
+            color: #abb2bf;
+            cursor: pointer;
+            padding: 2px 5px;
+            border-radius: 2px;
+            font-size: 14px;
+        }
+        
+        .split-pane-close:hover {
+            background-color: #e06c75;
+            color: white;
+        }
+        
         .terminal-pane {
             position: absolute;
             top: 0;
@@ -283,6 +362,31 @@
         
         .settings-btn:hover {
             background-color: #4f5765 !important;
+        }
+        
+        /* 分割ボタン */
+        .split-btn {
+            background-color: #3e4451 !important;
+            border: 1px solid #5c6370 !important;
+            color: #abb2bf !important;
+            font-size: 16px !important;
+            width: 35px !important;
+            height: 35px !important;
+            padding: 0 !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            margin: 0 2px !important;
+        }
+        
+        .split-btn:hover {
+            background-color: #4f5765 !important;
+        }
+        
+        .split-btn:disabled {
+            background-color: #2c313c !important;
+            color: #5c6370 !important;
+            cursor: not-allowed !important;
         }
         
         /* 設定パネル */
@@ -421,6 +525,9 @@
             <div class="tab-actions">
                 <button class="new-tab-btn" id="new-tab-btn" title="新しいタブを開く">+</button>
                 <button class="settings-btn" id="settings-btn" title="設定">⚙️</button>
+                <button class="split-btn" id="split-horizontal-btn" title="水平分割">⊟</button>
+                <button class="split-btn" id="split-vertical-btn" title="垂直分割">⊞</button>
+                <button class="split-btn" id="unsplit-btn" title="分割解除" style="display: none;">⊡</button>
                 <button id="close-all-btn" title="すべてのタブを閉じる">すべて閉じる</button>
             </div>
         </div>
@@ -495,6 +602,13 @@
                 this.activeTabId = null;
                 this.tabCounter = 0;
                 this.socket = io();
+                
+                // 分割画面の状態管理
+                this.splitView = {
+                    enabled: false,
+                    direction: null, // 'horizontal' or 'vertical'
+                    panes: []
+                };
                 
                 // 設定のデフォルト値
                 this.settings = {
@@ -584,6 +698,19 @@
                 
                 document.getElementById('close-settings').addEventListener('click', () => {
                     this.hideSettings();
+                });
+                
+                // 分割画面関連のイベント
+                document.getElementById('split-horizontal-btn').addEventListener('click', () => {
+                    this.enableSplitView('horizontal');
+                });
+                
+                document.getElementById('split-vertical-btn').addEventListener('click', () => {
+                    this.enableSplitView('vertical');
+                });
+                
+                document.getElementById('unsplit-btn').addEventListener('click', () => {
+                    this.disableSplitView();
                 });
                 
                 document.getElementById('server-search').addEventListener('input', (e) => {
@@ -731,6 +858,9 @@
                     server_id: server.id
                 });
                 
+                // 分割ボタンの状態を更新
+                this.updateSplitButtonsVisibility();
+                
                 return tabId;
             }
             
@@ -823,6 +953,12 @@
                 
                 if (!this.tabs.has(tabId)) return;
                 
+                // 分割表示の場合は異なる処理
+                if (this.splitView.enabled) {
+                    this.switchToTabInSplitView(tabId);
+                    return;
+                }
+                
                 // 前のアクティブタブを非アクティブに
                 if (this.activeTabId) {
                     const prevTabElement = document.querySelector(`[data-tab-id="${this.activeTabId}"]`);
@@ -848,6 +984,79 @@
                         tab.terminal.focus();
                     }, 50);
                 }
+            }
+            
+            switchToTabInSplitView(tabId) {
+                // 分割表示では、クリックされたタブが表示されていない場合、
+                // 最初のペインをそのタブに切り替える
+                const isTabVisible = this.splitView.panes.some(pane => pane.tabId === tabId);
+                
+                if (!isTabVisible && this.splitView.panes.length > 0) {
+                    // 最初のペインを新しいタブに変更
+                    this.replacePaneTab(0, tabId);
+                }
+                
+                // タブの視覚的な状態を更新
+                document.querySelectorAll('.tab-item').forEach(el => el.classList.remove('active'));
+                const tabElement = document.querySelector(`[data-tab-id="${tabId}"]`);
+                if (tabElement) tabElement.classList.add('active');
+                
+                this.activeTabId = tabId;
+                
+                // ターミナルにフォーカス
+                const tab = this.tabs.get(tabId);
+                if (tab && tab.terminal) {
+                    setTimeout(() => {
+                        tab.fitAddon.fit();
+                        tab.terminal.focus();
+                    }, 50);
+                }
+            }
+            
+            replacePaneTab(paneIndex, newTabId) {
+                const pane = this.splitView.panes[paneIndex];
+                if (!pane) return;
+                
+                const newTab = this.tabs.get(newTabId);
+                if (!newTab) return;
+                
+                // ペインの内容を更新
+                const paneElement = pane.element;
+                const header = paneElement.querySelector('.split-pane-header .split-pane-title');
+                const closeBtn = paneElement.querySelector('.split-pane-close');
+                
+                if (header) {
+                    header.textContent = `${newTab.server.name} (${newTab.server.host})`;
+                }
+                if (closeBtn) {
+                    closeBtn.dataset.tabId = newTabId;
+                }
+                
+                // ターミナル要素を移動
+                const terminalDiv = paneElement.querySelector('div:last-child');
+                if (terminalDiv) {
+                    // 既存のターミナルをクリア
+                    terminalDiv.innerHTML = '';
+                    
+                    // 新しいターミナルを追加
+                    const existingPane = document.querySelector(`.terminal-pane[data-tab-id="${newTabId}"]`);
+                    if (existingPane) {
+                        const terminalWrapper = existingPane.querySelector('.terminal-wrapper');
+                        if (terminalWrapper) {
+                            terminalDiv.appendChild(terminalWrapper);
+                        }
+                    }
+                }
+                
+                // ペイン情報を更新
+                pane.tabId = newTabId;
+                
+                // ターミナルサイズを調整
+                setTimeout(() => {
+                    if (newTab.fitAddon) {
+                        newTab.fitAddon.fit();
+                    }
+                }, 100);
             }
             
             closeTab(tabId) {
@@ -882,6 +1091,14 @@
                         this.switchToTab(firstTabId);
                     }
                 }
+                
+                // 分割表示中にタブが閉じられた場合の処理
+                if (this.splitView.enabled && this.tabs.size < 2) {
+                    this.disableSplitView();
+                }
+                
+                // 分割ボタンの状態を更新
+                this.updateSplitButtonsVisibility();
             }
             
             closeActiveTab() {
@@ -1256,7 +1473,212 @@
                 });
             }
             
-            // 外部からサーバーを追加する機能
+            // 分割画面機能
+            enableSplitView(direction) {
+                if (this.tabs.size < 2) {
+                    alert('分割表示には少なくとも2つのタブが必要です');
+                    return;
+                }
+                
+                this.splitView.enabled = true;
+                this.splitView.direction = direction;
+                
+                // 分割表示用のレイアウトを作成
+                this.createSplitLayout();
+                
+                // ボタンの表示状態を更新
+                this.updateSplitButtonsVisibility();
+                
+                console.log(`Split view enabled: ${direction}`);
+            }
+            
+            disableSplitView() {
+                this.splitView.enabled = false;
+                this.splitView.direction = null;
+                this.splitView.panes = [];
+                
+                // 通常のタブ表示に戻す
+                this.restoreTabLayout();
+                
+                // ボタンの表示状態を更新
+                this.updateSplitButtonsVisibility();
+                
+                console.log('Split view disabled');
+            }
+            
+            createSplitLayout() {
+                const terminalContent = document.getElementById('terminal-content');
+                const tabIds = Array.from(this.tabs.keys());
+                
+                // 既存のペインをクリア
+                terminalContent.innerHTML = '';
+                
+                // 分割コンテナを作成
+                const splitContainer = document.createElement('div');
+                splitContainer.className = `split-container ${this.splitView.direction}`;
+                splitContainer.id = 'split-container';
+                
+                // 最初の2つのタブを分割表示
+                for (let i = 0; i < Math.min(2, tabIds.length); i++) {
+                    const tabId = tabIds[i];
+                    const tab = this.tabs.get(tabId);
+                    
+                    this.createSplitPane(splitContainer, tab, i);
+                    
+                    if (i < Math.min(2, tabIds.length) - 1) {
+                        // リサイザーを追加
+                        const resizer = document.createElement('div');
+                        resizer.className = 'split-resizer';
+                        resizer.addEventListener('mousedown', (e) => this.initResize(e, i));
+                        splitContainer.appendChild(resizer);
+                    }
+                }
+                
+                terminalContent.appendChild(splitContainer);
+                
+                // 各ターミナルのサイズを調整
+                setTimeout(() => {
+                    tabIds.slice(0, 2).forEach(tabId => {
+                        const tab = this.tabs.get(tabId);
+                        if (tab && tab.fitAddon) {
+                            tab.fitAddon.fit();
+                        }
+                    });
+                }, 100);
+            }
+            
+            createSplitPane(container, tab, index) {
+                const pane = document.createElement('div');
+                pane.className = 'split-pane';
+                pane.setAttribute('data-pane-index', index);
+                
+                // ペインヘッダー
+                const header = document.createElement('div');
+                header.className = 'split-pane-header';
+                header.innerHTML = `
+                    <span class="split-pane-title">${tab.server.name} (${tab.server.host})</span>
+                    <button class="split-pane-close" data-tab-id="${tab.id}">×</button>
+                `;
+                
+                // ペイン閉じるボタンのイベント
+                header.querySelector('.split-pane-close').addEventListener('click', (e) => {
+                    const tabId = e.target.dataset.tabId;
+                    this.closeTab(tabId);
+                });
+                
+                // ターミナルコンテンツ
+                const terminalDiv = document.createElement('div');
+                terminalDiv.style.height = 'calc(100% - 30px)'; // ヘッダー分を除く
+                terminalDiv.style.position = 'relative';
+                
+                // 既存のターミナルペインを移動
+                const existingPane = document.querySelector(`.terminal-pane[data-tab-id="${tab.id}"]`);
+                if (existingPane) {
+                    const terminalWrapper = existingPane.querySelector('.terminal-wrapper');
+                    if (terminalWrapper) {
+                        terminalDiv.appendChild(terminalWrapper);
+                    }
+                }
+                
+                pane.appendChild(header);
+                pane.appendChild(terminalDiv);
+                container.appendChild(pane);
+                
+                this.splitView.panes.push({
+                    tabId: tab.id,
+                    element: pane
+                });
+            }
+            
+            restoreTabLayout() {
+                const terminalContent = document.getElementById('terminal-content');
+                terminalContent.innerHTML = '';
+                
+                // 各タブのターミナルペインを再作成
+                this.tabs.forEach((tab, tabId) => {
+                    this.createTerminalPane(tab);
+                });
+                
+                // アクティブなタブを表示
+                if (this.activeTabId) {
+                    this.switchToTab(this.activeTabId);
+                }
+            }
+            
+            updateSplitButtonsVisibility() {
+                const splitHorizontalBtn = document.getElementById('split-horizontal-btn');
+                const splitVerticalBtn = document.getElementById('split-vertical-btn');
+                const unsplitBtn = document.getElementById('unsplit-btn');
+                
+                if (this.splitView.enabled) {
+                    splitHorizontalBtn.style.display = 'none';
+                    splitVerticalBtn.style.display = 'none';
+                    unsplitBtn.style.display = 'flex';
+                } else {
+                    splitHorizontalBtn.style.display = 'flex';
+                    splitVerticalBtn.style.display = 'flex';
+                    unsplitBtn.style.display = 'none';
+                    
+                    // タブが2つ未満の場合は分割ボタンを無効化
+                    const canSplit = this.tabs.size >= 2;
+                    splitHorizontalBtn.disabled = !canSplit;
+                    splitVerticalBtn.disabled = !canSplit;
+                }
+            }
+            
+            initResize(e, paneIndex) {
+                e.preventDefault();
+                
+                const container = document.getElementById('split-container');
+                const panes = container.querySelectorAll('.split-pane');
+                const isHorizontal = this.splitView.direction === 'horizontal';
+                
+                const startPos = isHorizontal ? e.clientY : e.clientX;
+                const containerSize = isHorizontal ? container.offsetHeight : container.offsetWidth;
+                
+                const pane1 = panes[paneIndex];
+                const pane2 = panes[paneIndex + 1];
+                
+                const mouseMoveHandler = (e) => {
+                    const currentPos = isHorizontal ? e.clientY : e.clientX;
+                    const delta = currentPos - startPos;
+                    const containerRect = container.getBoundingClientRect();
+                    
+                    const currentPos1 = isHorizontal ? 
+                        ((pane1.offsetHeight + delta) / containerSize) * 100 :
+                        ((pane1.offsetWidth + delta) / containerSize) * 100;
+                    
+                    const currentPos2 = 100 - currentPos1;
+                    
+                    if (currentPos1 > 10 && currentPos2 > 10) {
+                        pane1.style.flex = `0 0 ${currentPos1}%`;
+                        pane2.style.flex = `0 0 ${currentPos2}%`;
+                        
+                        // ターミナルのサイズを再調整
+                        setTimeout(() => {
+                            const tab1Id = this.splitView.panes[paneIndex]?.tabId;
+                            const tab2Id = this.splitView.panes[paneIndex + 1]?.tabId;
+                            
+                            if (tab1Id) {
+                                const tab1 = this.tabs.get(tab1Id);
+                                if (tab1?.fitAddon) tab1.fitAddon.fit();
+                            }
+                            if (tab2Id) {
+                                const tab2 = this.tabs.get(tab2Id);
+                                if (tab2?.fitAddon) tab2.fitAddon.fit();
+                            }
+                        }, 10);
+                    }
+                };
+                
+                const mouseUpHandler = () => {
+                    document.removeEventListener('mousemove', mouseMoveHandler);
+                    document.removeEventListener('mouseup', mouseUpHandler);
+                };
+                
+                document.addEventListener('mousemove', mouseMoveHandler);
+                document.addEventListener('mouseup', mouseUpHandler);
+            }
             addServerTab(serverId) {
                 console.log('Adding server tab for ID:', serverId);
                 fetch('/api/servers')

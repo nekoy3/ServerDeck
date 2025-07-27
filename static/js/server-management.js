@@ -1,5 +1,7 @@
 // サーバー管理機能
 window.ServerManagement = {
+    sshWindow: null, // SSH マルチタブウィンドウの参照
+    
     // メインページのサーバーカードを更新する関数
     updateMainPageServerCards: function() {
         APIManager.servers.getAll()
@@ -377,9 +379,33 @@ window.ServerManagement = {
         
         console.log('🔧 Opening SSH connection for server (multi-tab mode):', serverId);
         
-        // 新規タブでマルチタブ対応のSSH接続を開く
-        const sshUrl = `/ssh_multitab?server_id=${serverId}`;
-        window.open(sshUrl, '_blank');
+        // 既存のマルチタブSSHウィンドウを探す
+        const existingSSHWindow = this.findExistingSSHWindow();
+        
+        if (existingSSHWindow && !existingSSHWindow.closed) {
+            // 既存のウィンドウにタブを追加
+            console.log('🔧 Adding tab to existing SSH window');
+            existingSSHWindow.postMessage({
+                type: 'ADD_SSH_TAB',
+                serverId: serverId
+            }, window.location.origin);
+            
+            // 既存のウィンドウにフォーカス
+            existingSSHWindow.focus();
+        } else {
+            // 新しいウィンドウを開く
+            console.log('🔧 Opening new SSH window');
+            const sshUrl = `/ssh_multitab?server_id=${serverId}`;
+            const newWindow = window.open(sshUrl, 'ssh-multitab', 'width=1200,height=800');
+            
+            // 新しいウィンドウの参照を保存
+            this.sshWindow = newWindow;
+        }
+    },
+    
+    // 既存のSSHウィンドウを探す
+    findExistingSSHWindow: function() {
+        return this.sshWindow;
     },
 
     // 動的に生成されたドロップダウンを再初期化する

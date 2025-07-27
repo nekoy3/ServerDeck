@@ -1556,7 +1556,14 @@ def _multitab_ssh_read_loop(channel, tab_id):
     max_empty_reads = 50  # 0.5秒 * 50 = 25秒で SSH接続タイムアウト 判定
     read_timeout = 25.0  # 25秒でread操作をタイムアウト
     
-    app.logger.debug(f"Starting SSH read loop for tab {tab_id} (monitoring SSH connection timeout)")
+    app.logger.info(f"[SSH_LOOP_DEBUG] Starting SSH read loop for tab {tab_id}")
+    
+    # セッション情報を取得してログ出力
+    if tab_id in multitab_ssh_sessions:
+        server_info = multitab_ssh_sessions[tab_id]['server_info']
+        app.logger.info(f"[SSH_LOOP_DEBUG] Tab {tab_id} is connected to server {server_info.get('id', 'unknown')}")
+    else:
+        app.logger.warning(f"[SSH_LOOP_DEBUG] Tab {tab_id} not found in sessions during loop start")
     
     try:
         while not channel.closed:
@@ -1648,7 +1655,11 @@ def handle_start_ssh_tab(data):
     # 初期化: 接続開始状態
     update_multitab_ssh_status(tab_id, 'initializing', 'SSH接続を開始しています...', 10)
     
-    app.logger.debug(f"Received start_ssh_tab event. Tab ID: {tab_id}, Server ID: {server_id}, SID: {sid}")
+    app.logger.info(f"[SSH_TAB_DEBUG] Received start_ssh_tab event. Tab ID: {tab_id}, Server ID: {server_id}, SID: {sid}")
+    
+    # セッション管理のログ追加
+    app.logger.info(f"[SSH_TAB_DEBUG] Current multitab_ssh_sessions keys: {list(multitab_ssh_sessions.keys())}")
+    app.logger.info(f"[SSH_TAB_DEBUG] Tab {tab_id} - Starting connection to server {server_id}")
     
     config = load_servers_config()
     server_info = next((s for s in config.get('servers', []) if s['id'] == server_id), None)
@@ -1706,16 +1717,36 @@ def handle_start_ssh_tab(data):
                     
                     try:
                         key = paramiko.RSAKey.from_private_key_file(key_path_expanded)
+                        app.logger.debug(f"Successfully loaded RSA key: {ssh_key_info['name']}")
+                    except paramiko.PasswordRequiredException:
+                        app.logger.debug(f"RSA key requires passphrase: {ssh_key_info['name']}")
+                        update_multitab_ssh_status(tab_id, 'error', f"SSH鍵 '{ssh_key_info['name']}' にパスフレーズが必要です", 0)
+                        emit('ssh_output', {'tab_id': tab_id, 'output': f"Error: SSH Key '{ssh_key_info['name']}' requires a passphrase (RSA format).\r\n"})
+                        client.close()
+                        return
                     except paramiko.SSHException as e:
                         app.logger.debug(f"RSAKey load failed: {e}. Attempting Ed25519Key.")
                         try:
                             key = paramiko.Ed25519Key(filename=key_path_expanded)
-                        except Exception as ed25519_e:
-                            app.logger.debug(f"Ed25519Key load failed: {ed25519_e}.")
-                            update_multitab_ssh_status(tab_id, 'error', f"SSH鍵の読み込みに失敗しました", 0)
-                            emit('ssh_output', {'tab_id': tab_id, 'output': f"Error loading SSH Key '{ssh_key_info['name']}': {e} (RSA) / {ed25519_e} (Ed25519)\r\n"})
+                            app.logger.debug(f"Successfully loaded Ed25519 key: {ssh_key_info['name']}")
+                        except paramiko.PasswordRequiredException:
+                            app.logger.debug(f"Ed25519 key requires passphrase: {ssh_key_info['name']}")
+                            update_multitab_ssh_status(tab_id, 'error', f"SSH鍵 '{ssh_key_info['name']}' にパスフレーズが必要です", 0)
+                            emit('ssh_output', {'tab_id': tab_id, 'output': f"Error: SSH Key '{ssh_key_info['name']}' requires a passphrase (Ed25519 format).\r\n"})
                             client.close()
                             return
+                        except Exception as ed25519_e:
+                            app.logger.debug(f"Ed25519Key load failed: {ed25519_e}.")
+                            update_multitab_ssh_status(tab_id, 'error', f"SSH鍵ファイルの読み込みに失敗しました", 0)
+                            emit('ssh_output', {'tab_id': tab_id, 'output': f"SSH Key file format error for '{ssh_key_info['name']}':\r\nRSA format: {e}\r\nEd25519 format: {ed25519_e}\r\nPlease check if the key file is corrupted or in an unsupported format.\r\n"})
+                            client.close()
+                            return
+                    except Exception as e:
+                        app.logger.debug(f"Failed to load SSH key file: {e}")
+                        update_multitab_ssh_status(tab_id, 'error', f"SSH鍵ファイルの読み込みに失敗しました", 0)
+                        emit('ssh_output', {'tab_id': tab_id, 'output': f"SSH Key file loading error for '{ssh_key_info['name']}': {e}\r\nThis appears to be a file permission or format issue.\r\n"})
+                        client.close()
+                        return
                     
                     # SSH鍵認証で接続: 70%
                     update_multitab_ssh_status(tab_id, 'authenticating', f"SSH鍵で認証中...", 70)
@@ -1742,10 +1773,22 @@ def handle_start_ssh_tab(data):
                     emit('ssh_output', {'tab_id': tab_id, 'output': f"Error: SSH Key '{ssh_key_info['name']}' requires a passphrase.\r\n"})
                     client.close()
                     return
+                except paramiko.AuthenticationException:
+                    app.logger.debug(f"SSH authentication failed for {hostname} with username {username} using key {ssh_key_info['name']}")
+                    update_multitab_ssh_status(tab_id, 'error', f"SSH認証失敗（ユーザー名またはSSH鍵が正しくありません）", 0)
+                    emit('ssh_output', {'tab_id': tab_id, 'output': f"SSH authentication rejected for {username}@{hostname} using key '{ssh_key_info['name']}'.\r\nPlease check if the username '{username}' is correct for this server and if the SSH key is properly configured.\r\n"})
+                    client.close()
+                    return
+                except (paramiko.SSHException, OSError, ValueError) as e:
+                    app.logger.debug(f"SSH Key file loading error for '{ssh_key_info['name']}': {e}")
+                    update_multitab_ssh_status(tab_id, 'error', f"SSH鍵ファイル '{ssh_key_info['name']}' の読み込みエラー", 0)
+                    emit('ssh_output', {'tab_id': tab_id, 'output': f"SSH Key file loading error for '{ssh_key_info['name']}': {e}\r\nThis is a file format or permission issue, not an authentication problem.\r\n"})
+                    client.close()
+                    return
                 except Exception as e:
-                    app.logger.debug(f"Error loading SSH Key '{ssh_key_info['name']}': {e}")
-                    update_multitab_ssh_status(tab_id, 'error', f"SSH鍵 '{ssh_key_info['name']}' の読み込みエラー", 0)
-                    emit('ssh_output', {'tab_id': tab_id, 'output': f"Error loading SSH Key '{ssh_key_info['name']}': {e}\r\n"})
+                    app.logger.debug(f"Unexpected SSH connection error for '{ssh_key_info['name']}': {e}")
+                    update_multitab_ssh_status(tab_id, 'error', f"SSH接続エラー", 0)
+                    emit('ssh_output', {'tab_id': tab_id, 'output': f"SSH connection error: {e}\r\n"})
                     client.close()
                     return
             else:
@@ -1799,6 +1842,11 @@ def handle_start_ssh_tab(data):
             'server_info': server_info
         }
         
+        # デバッグログを追加
+        app.logger.info(f"[SSH_TAB_DEBUG] Tab {tab_id} - Successfully connected to server {server_id} ({hostname})")
+        app.logger.info(f"[SSH_TAB_DEBUG] Session stored with key: {tab_id}")
+        app.logger.info(f"[SSH_TAB_DEBUG] Updated multitab_ssh_sessions keys: {list(multitab_ssh_sessions.keys())}")
+        
         # 接続完了: 100%
         update_multitab_ssh_status(tab_id, 'connected', f'{hostname} に接続完了', 100)
         
@@ -1806,9 +1854,9 @@ def handle_start_ssh_tab(data):
         threading.Thread(target=_multitab_ssh_read_loop, args=(chan, tab_id), daemon=True).start()
         
     except paramiko.AuthenticationException:
-        app.logger.debug(f"Authentication failed for {hostname}.")
-        update_multitab_ssh_status(tab_id, 'error', f"認証に失敗しました", 0)
-        emit('ssh_output', {'tab_id': tab_id, 'output': "Authentication failed. Please check your credentials.\r\n"})
+        app.logger.debug(f"SSH authentication failed for {hostname} with username {username}")
+        update_multitab_ssh_status(tab_id, 'error', f"SSH認証エラー（ユーザー名またはSSH鍵が正しくありません）", 0)
+        emit('ssh_output', {'tab_id': tab_id, 'output': f"SSH authentication failed for {username}@{hostname}.\r\nPlease check username and SSH key configuration.\r\n"})
     except paramiko.SSHException as e:
         app.logger.debug(f"SSH error for {hostname}: {e}")
         update_multitab_ssh_status(tab_id, 'error', f"SSH接続エラー: {e}", 0)
@@ -1828,9 +1876,14 @@ def handle_ssh_input(data):
     
     if tab_id:
         # マルチタブモード
+        app.logger.info(f"[SSH_INPUT_DEBUG] Received input for tab {tab_id}")
         if tab_id in multitab_ssh_sessions:
             chan = multitab_ssh_sessions[tab_id]['channel']
+            server_info = multitab_ssh_sessions[tab_id]['server_info']
+            app.logger.info(f"[SSH_INPUT_DEBUG] Sending input to server {server_info.get('id', 'unknown')} for tab {tab_id}")
             chan.send(data['input'])
+        else:
+            app.logger.warning(f"[SSH_INPUT_DEBUG] Tab {tab_id} not found in multitab_ssh_sessions. Available keys: {list(multitab_ssh_sessions.keys())}")
     else:
         # 既存の単一タブモード
         if sid in active_ssh_sessions:
