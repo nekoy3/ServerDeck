@@ -64,6 +64,11 @@
                             <li><a class="dropdown-item" href="{{ url_for('logout') }}">ログアウト</a></li>
                         </ul>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link text-danger" href="{{ url_for('logout') }}" title="ログアウト">
+                            <i class="fas fa-sign-out-alt"></i>
+                        </a>
+                    </li>
                     {% endif %}
                 </ul>
             </div>

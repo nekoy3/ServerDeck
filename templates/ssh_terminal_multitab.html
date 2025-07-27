@@ -636,6 +636,8 @@
             initializeSocket() {
                 this.socket.on('connect', () => {
                     console.log('Connected to WebSocket');
+                    // 接続後にSSHタブの状態復元を試行
+                    this.loadSavedTabsState();
                 });
                 
                 this.socket.on('ssh_status_update', (data) => {
@@ -667,6 +669,11 @@
                     this.handleSSHConnectionClosed(data.tab_id, data.message);
                 });
                 
+                this.socket.on('restore_ssh_tabs', (data) => {
+                    console.log('Restoring SSH tabs from session:', data);
+                    this.restoreTabsFromSession(data.tabs);
+                });
+                
                 this.socket.on('disconnect', () => {
                     console.log('Disconnected from WebSocket');
                     this.handleDisconnection();
@@ -676,6 +683,11 @@
                 setInterval(() => {
                     this.checkTabConnections();
                 }, 2000);
+                
+                // 定期的な状態保存（30秒ごと）
+                setInterval(() => {
+                    this.saveTabsState();
+                }, 30000);
             }
             
             initializeEventListeners() {
@@ -1099,6 +1111,9 @@
                 
                 // 分割ボタンの状態を更新
                 this.updateSplitButtonsVisibility();
+                
+                // タブが変更されたので状態を保存
+                this.saveTabsState();
             }
             
             closeActiveTab() {
@@ -1698,6 +1713,101 @@
                         console.error('Failed to load server for external add:', error);
                     });
             }
+            
+            // セッション状態の保存
+            saveTabsState() {
+                if (this.tabs.size === 0) return;
+                
+                const tabsData = [];
+                this.tabs.forEach((tab, tabId) => {
+                    const server = tab.server;
+                    if (server && tab.status === 'connected') {
+                        tabsData.push({
+                            tab_id: tabId,
+                            server_id: server.id,
+                            server_name: server.name,
+                            hostname: server.host,
+                            username: server.username || 'root',
+                            connected: true,
+                            saved_at: new Date().toISOString()
+                        });
+                    }
+                });
+                
+                if (tabsData.length > 0) {
+                    this.socket.emit('save_ssh_tabs_state', { tabs: tabsData });
+                    console.log('SSH tabs state saved:', tabsData.length, 'tabs');
+                }
+            }
+            
+            // セッション状態の読み込み
+            loadSavedTabsState() {
+                this.socket.emit('load_ssh_tabs_state');
+                console.log('Requesting SSH tabs state restoration...');
+            }
+            
+            // セッションからタブを復元
+            restoreTabsFromSession(savedTabs) {
+                if (!savedTabs || savedTabs.length === 0) {
+                    console.log('No saved tabs to restore');
+                    return;
+                }
+                
+                console.log('Restoring tabs from session:', savedTabs);
+                
+                // 現在のタブを確認し、重複を避ける
+                const existingServerIds = new Set();
+                this.tabs.forEach(tab => {
+                    if (tab.server && tab.server.id) {
+                        existingServerIds.add(tab.server.id);
+                    }
+                });
+                
+                let restoredCount = 0;
+                savedTabs.forEach(savedTab => {
+                    // 既に同じサーバーのタブが存在する場合はスキップ
+                    if (existingServerIds.has(savedTab.server_id)) {
+                        console.log(`Tab for server ${savedTab.server_name} already exists, skipping restoration`);
+                        return;
+                    }
+                    
+                    // サーバー情報を構築
+                    const serverInfo = {
+                        id: savedTab.server_id,
+                        name: savedTab.server_name,
+                        host: savedTab.hostname,
+                        username: savedTab.username
+                    };
+                    
+                    // タブを復元（接続は自動で開始される）
+                    console.log(`Restoring tab for server: ${savedTab.server_name}`);
+                    this.createNewTab(serverInfo);
+                    restoredCount++;
+                });
+                
+                if (restoredCount > 0) {
+                    console.log(`Successfully restored ${restoredCount} SSH tabs from session`);
+                    // 復元完了通知
+                    this.showNotification(`${restoredCount}個のSSH接続を復元しました`, 'info');
+                }
+            }
+            
+            // 通知表示（既存のメソッドがない場合用）
+            showNotification(message, type = 'info') {
+                console.log(`[${type.toUpperCase()}] ${message}`);
+                
+                // ブラウザ通知を表示
+                if ('Notification' in window && Notification.permission === 'granted') {
+                    new Notification('SSH Multi-Tab', {
+                        body: message,
+                        icon: '/static/favicon.ico'
+                    });
+                }
+                
+                // コンソールにも表示
+                const logLevel = type === 'error' ? 'error' : type === 'warning' ? 'warn' : 'info';
+                console[logLevel](`SSH Multi-Tab: ${message}`);
+            }
         }
         
         // グローバル変数として定義
@@ -1726,6 +1836,20 @@
                 }
             }).catch(error => {
                 console.error('Failed to load servers:', error);
+            });
+            
+            // ページ離脱時に状態を保存
+            window.addEventListener('beforeunload', () => {
+                if (sshMultiTab) {
+                    sshMultiTab.saveTabsState();
+                }
+            });
+            
+            // ページ非表示時にも状態を保存
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'hidden' && sshMultiTab) {
+                    sshMultiTab.saveTabsState();
+                }
             });
         });
     </script>

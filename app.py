@@ -20,6 +20,9 @@ import shutil
 import requests
 import random
 
+# セッションマネージャーをインポート
+from session_manager import initialize_session_manager, get_session_manager
+
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.urandom(24)
 
@@ -29,9 +32,13 @@ app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=1)
 app.config["SESSION_COOKIE_SECURE"] = False  # HTTPでも動作するように
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+app.config["SESSION_CLEANUP_INTERVAL"] = 3600  # 1時間ごとにクリーンアップ
 Session(app)
 
 socketio = SocketIO(app)
+
+# セッションマネージャーを初期化
+initialize_session_manager(app)
 
 # --- Ping Utility ---
 def ping_host(host, count=1, timeout=1):
@@ -350,8 +357,9 @@ def login():
         
         if user and check_password_hash(user['password_hash'], password):
             session['username'] = user['username']
+            session['session_id'] = os.urandom(16).hex()  # セッションIDを生成
             session.permanent = True
-            app.logger.debug(f"Login successful for user: {username}")
+            app.logger.debug(f"Login successful for user: {username}, session ID: {session['session_id']}")
             flash('Logged in successfully.', 'success')
             next_page = request.args.get('next')
             redirect_url = next_page or url_for('index')
@@ -365,8 +373,32 @@ def login():
 
 @app.route('/logout')
 def logout():
+    # 現在のユーザー名とセッションIDを取得（ログ用）
+    username = session.get('username', 'Unknown')
+    session_id = session.get('session_id', 'Unknown')
+    
+    # セッションマネージャーを使ってSSHタブ状態をクリーンアップ
+    if session_id != 'Unknown':
+        try:
+            session_manager = get_session_manager()
+            # 該当セッションのSSHタブ状態を削除
+            ssh_tabs_data = session_manager.load_all_ssh_tabs_state()
+            if session_id in ssh_tabs_data:
+                del ssh_tabs_data[session_id]
+                # 更新されたデータを保存
+                import json
+                ssh_tabs_file = session_manager.ssh_tabs_file
+                with open(ssh_tabs_file, 'w', encoding='utf-8') as f:
+                    json.dump(ssh_tabs_data, f, ensure_ascii=False, indent=2)
+                app.logger.debug(f"SSH tabs state cleaned up for session {session_id}")
+        except Exception as e:
+            app.logger.warning(f"Error cleaning up SSH tabs state during logout: {e}")
+    
+    # Flaskセッションをクリア
     session.clear()
-    flash('You have been logged out.', 'info')
+    
+    app.logger.info(f"User {username} logged out (session ID: {session_id})")
+    flash('ログアウトしました。', 'info')
     return redirect(url_for('login'))
 
 
@@ -393,13 +425,23 @@ def test_page():
 @app.route('/debug')
 def debug_page():
     """デバッグ情報を表示するページ"""
+    session_info = {
+        'logged_in': 'username' in session,
+        'username': session.get('username', 'Not set'),
+        'session_id': session.get('session_id', 'Not set'),
+        'all_session_keys': list(session.keys())
+    }
+    
     return f'''<!DOCTYPE html>
 <html>
 <head><title>Debug Info</title></head>
 <body>
     <h1>Debug Information</h1>
     <p>Current time: {datetime.now()}</p>
-    <p>Session: {'logged in' if 'username' in session else 'not logged in'}</p>
+    <p>Session logged in: {session_info['logged_in']}</p>
+    <p>Username: {session_info['username']}</p>
+    <p>Session ID: {session_info['session_id']}</p>
+    <p>All session keys: {session_info['all_session_keys']}</p>
     <p>Flask version: Working</p>
 </body>
 </html>'''
@@ -1544,7 +1586,7 @@ def update_multitab_ssh_status(tab_id, status, message, progress):
         'progress': progress
     })
 
-def _multitab_ssh_read_loop(channel, tab_id):
+def _multitab_ssh_read_loop(channel, tab_id, sid):
     """
     マルチタブSSH用の読み取りループ（Paramikoベースの SSH接続タイムアウト 監視付き）
     
@@ -1578,7 +1620,7 @@ def _multitab_ssh_read_loop(channel, tab_id):
                             socketio.emit('ssh_output', {
                                 'tab_id': tab_id,
                                 'output': output
-                            })
+                            }, room=sid)
                         else:
                             consecutive_empty_reads += 1
                             app.logger.debug(f"Empty read #{consecutive_empty_reads} for tab {tab_id}")
@@ -1632,7 +1674,7 @@ def _multitab_ssh_read_loop(channel, tab_id):
                 socketio.emit('ssh_connection_closed', {
                     'tab_id': tab_id,
                     'message': 'SSH接続が切断されました'
-                })
+                }, room=sid)
                 app.logger.debug(f"Sent connection closed event for tab {tab_id}")
             except Exception as e:
                 app.logger.error(f"Error sending connection closed event for tab {tab_id}: {e}")
@@ -1839,7 +1881,9 @@ def handle_start_ssh_tab(data):
             'client': client,
             'channel': chan,
             'sid': sid,
-            'server_info': server_info
+            'server_info': server_info,
+            'server_config': server_info,  # 状態保存用
+            'username': username  # 状態保存用
         }
         
         # デバッグログを追加
@@ -1851,7 +1895,12 @@ def handle_start_ssh_tab(data):
         update_multitab_ssh_status(tab_id, 'connected', f'{hostname} に接続完了', 100)
         
         emit('ssh_output', {'tab_id': tab_id, 'output': f"Successfully connected to {hostname}.\r\n"})
-        threading.Thread(target=_multitab_ssh_read_loop, args=(chan, tab_id), daemon=True).start()
+        
+        # マルチタブ用のSSH出力読み取りスレッドを開始
+        threading.Thread(target=_multitab_ssh_read_loop, args=(chan, tab_id, sid), daemon=True).start()
+        
+        # SSH接続成功時に状態を保存
+        _save_ssh_tabs_state()
         
     except paramiko.AuthenticationException:
         app.logger.debug(f"SSH authentication failed for {hostname} with username {username}")
@@ -1935,6 +1984,94 @@ def handle_close_ssh_tab(data):
         
         del multitab_ssh_sessions[tab_id]
         app.logger.debug(f"SSH tab session removed: {tab_id}")
+        
+        # セッションからも削除（状態保存）
+        _save_ssh_tabs_state()
+
+@socketio.on('save_ssh_tabs_state')
+def handle_save_ssh_tabs_state(data):
+    """SSHタブの状態をセッションに保存"""
+    if not _is_authenticated():
+        return
+    
+    tabs_data = data.get('tabs', [])
+    # FlaskのログインセッションIDを使用
+    session_id = session.get('session_id')
+    
+    # セッションIDが存在しない場合は新規生成（通常はログイン時に設定済み）
+    if not session_id:
+        session_id = os.urandom(16).hex()
+        session['session_id'] = session_id
+        session.permanent = True  # セッションを永続化
+        app.logger.debug(f"Generated new session ID for save: {session_id}")
+    
+    if tabs_data:
+        session_manager = get_session_manager()
+        session_manager.save_ssh_tabs_state(session_id, tabs_data)
+        app.logger.debug(f"SSH tabs state saved for session {session_id}: {len(tabs_data)} tabs")
+
+@socketio.on('load_ssh_tabs_state')
+def handle_load_ssh_tabs_state():
+    """セッションからSSHタブの状態を復元"""
+    app.logger.debug("load_ssh_tabs_state event received")
+    
+    if not _is_authenticated():
+        app.logger.debug("User not authenticated for SSH tabs restore")
+        emit('restore_ssh_tabs', {'tabs': []})
+        return
+    
+    # FlaskのログインセッションIDを使用（再ログイン時まで維持される）
+    session_id = session.get('session_id')
+    app.logger.debug(f"Session ID for SSH tabs restore: {session_id}")
+    
+    # セッションIDが存在しない場合は新規生成（通常はログイン時に設定済み）
+    if not session_id:
+        session_id = os.urandom(16).hex()
+        session['session_id'] = session_id
+        session.permanent = True  # セッションを永続化
+        app.logger.debug(f"Generated new session ID: {session_id}")
+    
+    session_manager = get_session_manager()
+    tabs_data = session_manager.load_ssh_tabs_state(session_id)
+    app.logger.debug(f"Loaded SSH tabs data: {tabs_data}")
+    
+    if tabs_data:
+        emit('restore_ssh_tabs', {'tabs': tabs_data})
+        app.logger.debug(f"SSH tabs state restored for session {session_id}: {len(tabs_data)} tabs")
+    else:
+        emit('restore_ssh_tabs', {'tabs': []})
+        app.logger.debug(f"No SSH tabs data found for session {session_id}")
+
+def _save_ssh_tabs_state():
+    """現在のSSHタブ状態をセッションに保存（内部用）"""
+    # FlaskのログインセッションIDを使用
+    session_id = session.get('session_id')
+    
+    # セッションIDが存在しない場合は新規生成（通常はログイン時に設定済み）
+    if not session_id:
+        session_id = os.urandom(16).hex()
+        session['session_id'] = session_id
+        session.permanent = True  # セッションを永続化
+        app.logger.debug(f"Generated new session ID for internal save: {session_id}")
+    
+    # 現在アクティブなタブ情報を収集
+    tabs_data = []
+    for tab_id, session_info in multitab_ssh_sessions.items():
+        server_config = session_info.get('server_config', {})
+        tabs_data.append({
+            'tab_id': tab_id,
+            'server_id': server_config.get('id', ''),
+            'server_name': server_config.get('name', ''),
+            'hostname': server_config.get('host', ''),
+            'username': session_info.get('username', ''),
+            'connected': True,
+            'saved_at': datetime.now().isoformat()
+        })
+    
+    if tabs_data:
+        session_manager = get_session_manager()
+        session_manager.save_ssh_tabs_state(session_id, tabs_data)
+        app.logger.debug(f"SSH tabs state saved for session {session_id}: {len(tabs_data)} tabs")
 
 @socketio.on('disconnect')
 def handle_disconnect():
@@ -1967,6 +2104,32 @@ def handle_disconnect():
             app.logger.debug(f"Multi-tab SSH session closed for tab: {tab_id}")
         except Exception as e:
             app.logger.debug(f"Error closing multi-tab SSH session {tab_id}: {e}")
+
+# セッション管理API
+@app.route('/api/session-stats')
+@login_required
+def session_stats():
+    """セッション統計情報を取得"""
+    session_manager = get_session_manager()
+    stats = session_manager.get_session_stats()
+    return jsonify(stats)
+
+@app.route('/api/session-cleanup', methods=['POST'])
+@login_required
+def manual_session_cleanup():
+    """手動でセッションクリーンアップを実行"""
+    session_manager = get_session_manager()
+    max_age_hours = request.json.get('max_age_hours', 24)
+    
+    deleted_count, remaining_count = session_manager.cleanup_expired_sessions(max_age_hours)
+    session_manager.cleanup_ssh_tabs_state(max_age_days=7)
+    
+    return jsonify({
+        'success': True,
+        'deleted_count': deleted_count,
+        'remaining_count': remaining_count,
+        'message': f'{deleted_count} expired session files deleted, {remaining_count} files remaining'
+    })
 
 if __name__ == '__main__':
     # Extra import のスケジュール開始
