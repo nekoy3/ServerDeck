@@ -75,6 +75,24 @@
             color: #61dafb;
         }
         
+        .tab-item.disconnected {
+            background-color: #5c2e2e;
+            border-bottom: 2px solid #e06c75;
+        }
+        
+        .tab-item.disconnected .tab-title {
+            color: #e06c75;
+        }
+        
+        .tab-item.needs-attention {
+            animation: pulse-attention 2s infinite;
+        }
+        
+        @keyframes pulse-attention {
+            0%, 100% { background-color: #3e4451; }
+            50% { background-color: #5c4e2e; }
+        }
+        
         .tab-item:hover:not(.active) {
             background-color: #3e4451;
         }
@@ -248,6 +266,134 @@
             background-color: #4f5765 !important;
         }
         
+        /* 設定ボタン */
+        .settings-btn {
+            background-color: #3e4451 !important;
+            border: 1px solid #5c6370 !important;
+            color: #abb2bf !important;
+            font-size: 14px !important;
+            width: 35px !important;
+            height: 35px !important;
+            padding: 0 !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            margin: 0 5px !important;
+        }
+        
+        .settings-btn:hover {
+            background-color: #4f5765 !important;
+        }
+        
+        /* 設定パネル */
+        .settings-panel {
+            background-color: #21252b;
+            border-bottom: 1px solid #3e4451;
+            padding: 0;
+            position: relative;
+            z-index: 10;
+        }
+        
+        .settings-content {
+            padding: 15px 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        .settings-title {
+            color: #61dafb;
+            margin: 0 0 15px 0;
+            font-size: 16px;
+            font-weight: 600;
+        }
+        
+        .settings-section {
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #2c313c;
+        }
+        
+        .settings-section:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+        
+        .settings-label {
+            display: block;
+            color: #abb2bf;
+            font-size: 14px;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+        
+        .settings-input {
+            background-color: #2c313c;
+            border: 1px solid #3e4451;
+            border-radius: 4px;
+            color: #abb2bf;
+            padding: 6px 10px;
+            font-size: 14px;
+            width: 100px;
+            margin-left: 10px;
+        }
+        
+        .settings-input:focus {
+            outline: none;
+            border-color: #61dafb;
+            box-shadow: 0 0 0 2px rgba(97, 218, 251, 0.2);
+        }
+        
+        .settings-checkbox {
+            margin-right: 8px;
+            accent-color: #61dafb;
+        }
+        
+        .settings-help {
+            display: block;
+            color: #7d8590;
+            font-size: 12px;
+            margin-top: 3px;
+            font-style: italic;
+        }
+        
+        .settings-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 1px solid #2c313c;
+        }
+        
+        .settings-save-btn {
+            background-color: #61dafb;
+            color: #282c34;
+            border: none;
+            padding: 6px 15px;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+        }
+        
+        .settings-save-btn:hover {
+            background-color: #4fa8c5;
+        }
+        
+        .settings-close-btn {
+            background-color: #3e4451;
+            color: #abb2bf;
+            border: 1px solid #5c6370;
+            padding: 6px 15px;
+            border-radius: 4px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        
+        .settings-close-btn:hover {
+            background-color: #4f5765;
+        }
+        
         /* レスポンシブ対応 */
         @media (max-width: 768px) {
             .tab-item {
@@ -274,7 +420,40 @@
             </div>
             <div class="tab-actions">
                 <button class="new-tab-btn" id="new-tab-btn" title="新しいタブを開く">+</button>
+                <button class="settings-btn" id="settings-btn" title="設定">⚙️</button>
                 <button id="close-all-btn" title="すべてのタブを閉じる">すべて閉じる</button>
+            </div>
+        </div>
+        
+        <!-- 設定パネル -->
+        <div class="settings-panel" id="settings-panel" style="display: none;">
+            <div class="settings-content">
+                <h6 class="settings-title">⚙️ 設定</h6>
+                <div class="settings-section">
+                    <label class="settings-label">
+                        クライアント無操作タイムアウト (分)
+                        <input type="number" id="client-timeout" class="settings-input" min="1" max="180" value="30">
+                    </label>
+                    <small class="settings-help">ユーザーが操作しない場合に自動切断する時間</small>
+                </div>
+                <div class="settings-section">
+                    <label class="settings-label">
+                        <input type="checkbox" id="show-notifications" class="settings-checkbox" checked>
+                        ブラウザ通知を表示
+                    </label>
+                    <small class="settings-help">バックグラウンドタブでイベントが発生した時に通知</small>
+                </div>
+                <div class="settings-section">
+                    <label class="settings-label">
+                        <input type="checkbox" id="auto-reconnect" class="settings-checkbox">
+                        自動再接続を有効化
+                    </label>
+                    <small class="settings-help">接続が切断された時に自動的に再接続を試行</small>
+                </div>
+                <div class="settings-actions">
+                    <button class="settings-save-btn" id="save-settings">保存</button>
+                    <button class="settings-close-btn" id="close-settings">閉じる</button>
+                </div>
             </div>
         </div>
         
@@ -317,9 +496,27 @@
                 this.tabCounter = 0;
                 this.socket = io();
                 
+                // 設定のデフォルト値
+                this.settings = {
+                    clientTimeout: 30, // 分
+                    showNotifications: true,
+                    autoReconnect: false
+                };
+                
                 this.initializeSocket();
                 this.initializeEventListeners();
+                this.initializeSettings();
                 this.loadServers();
+                this.requestNotificationPermission();
+            }
+            
+            requestNotificationPermission() {
+                // ブラウザ通知の許可を求める
+                if ('Notification' in window && Notification.permission === 'default') {
+                    Notification.requestPermission().then(permission => {
+                        console.log('Notification permission:', permission);
+                    });
+                }
             }
             
             initializeSocket() {
@@ -332,13 +529,39 @@
                 });
                 
                 this.socket.on('ssh_output', (data) => {
+                    const tab = this.tabs.get(data.tab_id);
+                    
+                    // disconnected状態のタブの場合、出力を受信したらconnected状態に復帰
+                    if (tab && tab.status === 'disconnected') {
+                        console.log(`🔄 Received output for disconnected tab ${data.tab_id}, restoring to connected state`);
+                        tab.status = 'connected';
+                        this.updateTabStatus(data.tab_id, { status: 'connected', message: '接続が復旧しました' });
+                    }
+                    
                     this.writeToTerminal(data.tab_id, data.output);
+                    // データ受信時に最後の活動時刻を更新
+                    if (tab) {
+                        const previousActivity = tab.lastActivity;
+                        tab.lastActivity = Date.now();
+                        console.log(`🔄 SSH output received for tab ${data.tab_id}, lastActivity updated (${previousActivity ? new Date(previousActivity).toISOString() : 'N/A'} -> ${new Date(tab.lastActivity).toISOString()})`,
+                            { outputLength: data.output.length, tabStatus: tab.status, timeSinceLastUpdate: previousActivity ? (tab.lastActivity - previousActivity) + 'ms' : 'N/A' });
+                    }
+                });
+                
+                this.socket.on('ssh_connection_closed', (data) => {
+                    console.log('SSH connection closed:', data);
+                    this.handleSSHConnectionClosed(data.tab_id, data.message);
                 });
                 
                 this.socket.on('disconnect', () => {
                     console.log('Disconnected from WebSocket');
                     this.handleDisconnection();
                 });
+                
+                // 定期的な接続チェック（2秒ごと - より安定した動作）
+                setInterval(() => {
+                    this.checkTabConnections();
+                }, 2000);
             }
             
             initializeEventListeners() {
@@ -348,6 +571,19 @@
                 
                 document.getElementById('close-all-btn').addEventListener('click', () => {
                     this.closeAllTabs();
+                });
+                
+                // 設定パネル関連のイベント
+                document.getElementById('settings-btn').addEventListener('click', () => {
+                    this.toggleSettings();
+                });
+                
+                document.getElementById('save-settings').addEventListener('click', () => {
+                    this.saveSettings();
+                });
+                
+                document.getElementById('close-settings').addEventListener('click', () => {
+                    this.hideSettings();
                 });
                 
                 document.getElementById('server-search').addEventListener('input', (e) => {
@@ -472,7 +708,8 @@
                     server: server,
                     terminal: new Terminal(),
                     fitAddon: new FitAddon.FitAddon(),
-                    status: 'connecting'
+                    status: 'connecting',
+                    lastActivity: Date.now()
                 };
                 
                 // ターミナルの設定
@@ -552,6 +789,14 @@
                 
                 // ターミナル入力イベント
                 tab.terminal.onData((data) => {
+                    // 入力時には常に最後の活動時刻を更新（アクティブでないタブでも）
+                    tab.lastActivity = Date.now();
+                    console.log(`🎯 User input detected on tab ${tab.id}, lastActivity reset to prevent timeout`, {
+                        tabId: tab.id,
+                        isActive: this.activeTabId === tab.id,
+                        lastActivity: new Date(tab.lastActivity).toISOString()
+                    });
+                    
                     if (this.activeTabId === tab.id) {
                         this.socket.emit('ssh_input', { 
                             tab_id: tab.id,
@@ -608,7 +853,9 @@
             closeTab(tabId) {
                 if (!this.tabs.has(tabId)) return;
                 
-                // SSH接続終了を通知
+                // SSH接続終了を通知（確実に切断）
+                console.log(`Explicitly closing SSH session for tab ${tabId} before tab closure`);
+                this.socket.emit('disconnect_ssh', { tab_id: tabId });
                 this.socket.emit('close_ssh_tab', { tab_id: tabId });
                 
                 // UIから削除
@@ -656,6 +903,10 @@
                 
                 tab.status = statusData.status;
                 
+                // ステータス更新時に最後の活動時刻を更新（特に接続完了時は重要）
+                tab.lastActivity = Date.now();
+                console.log(`Tab ${tabId} status updated to ${statusData.status}, lastActivity refreshed`);
+                
                 // タブステータス更新
                 const tabElement = document.querySelector(`[data-tab-id="${tabId}"]`);
                 if (tabElement) {
@@ -675,6 +926,13 @@
                     
                     // 接続完了時は状態表示を非表示に
                     if (statusData.status === 'connected') {
+                        // 接続完了時に追加でアクティビティを更新（タイムアウト防止）
+                        tab.lastActivity = Date.now();
+                        console.log(`SSH connection established for tab ${tabId}, lastActivity set to prevent timeout`, {
+                            status: statusData.status,
+                            lastActivity: new Date(tab.lastActivity).toISOString()
+                        });
+                        
                         setTimeout(() => {
                             connectionStatus.classList.remove('show');
                         }, 2000);
@@ -722,6 +980,279 @@
                         message: 'サーバーから切断されました',
                         progress: 0
                     });
+                });
+            }
+            
+            handleSSHConnectionClosed(tabId, message) {
+                console.log(`SSH connection closed for tab ${tabId}: ${message}`);
+                
+                const tab = this.tabs.get(tabId);
+                if (!tab) return;
+                
+                // まず、サーバー側のSSHセッションを明示的に切断
+                console.log(`Explicitly closing SSH session for tab ${tabId}`);
+                this.socket.emit('disconnect_ssh', { tab_id: tabId });
+                
+                // タブのステータスを更新
+                this.updateTabStatus(tabId, {
+                    status: 'disconnected',
+                    message: message,
+                    progress: 0
+                });
+                
+                // クライアント都合のタイムアウトかどうかをチェック
+                const isClientTimeout = message.includes('クライアント無操作タイムアウト');
+                
+                // 自動再接続が有効な場合は、クライアントタイムアウトでもタブを開き直す
+                if (this.settings.autoReconnect) {
+                    console.log(`自動再接続が有効なため、tab ${tabId} のタブを開き直します (${isClientTimeout ? 'クライアントタイムアウト' : 'SSH切断'})`);
+                    
+                    // ターミナルに自動再接続メッセージを表示
+                    if (tab.terminal) {
+                        tab.terminal.write(`\r\n\x1b[33m=== ${message} ===\x1b[0m\r\n`);
+                        if (isClientTimeout) {
+                            tab.terminal.write('\x1b[36mクライアントタイムアウトのため、タブを開き直しています...\x1b[0m\r\n');
+                        } else {
+                            tab.terminal.write('\x1b[36m自動再接続を試行中...\x1b[0m\r\n');
+                        }
+                    }
+                    
+                    // 3秒後にタブを開き直し（クライアントタイムアウトでもSSH切断でも同じ処理）
+                    setTimeout(() => {
+                        this.reconnectTab(tabId);
+                    }, 3000);
+                    
+                    return; // 自動再接続する場合は手動操作メニューは表示しない
+                }
+                
+                // ターミナルにメッセージを追加
+                if (tab.terminal) {
+                    tab.terminal.write(`\r\n\x1b[33m=== ${message} ===\x1b[0m\r\n`);
+                    tab.terminal.write('\x1b[36m操作:\x1b[0m\r\n');
+                    tab.terminal.write('  \x1b[32mR\x1b[0m - 再接続\r\n');
+                    tab.terminal.write('  \x1b[31mC\x1b[0m - タブを閉じる\r\n');
+                    tab.terminal.write('  \x1b[34mEnter\x1b[0m - このメニューを閉じる\r\n');
+                }
+                
+                // タブタイトルに切断状態を表示
+                const tabElement = document.querySelector(`[data-tab-id="${tabId}"]`);
+                if (tabElement) {
+                    const titleElement = tabElement.querySelector('.tab-title');
+                    if (titleElement && !titleElement.textContent.includes('[切断]')) {
+                        titleElement.textContent += ' [切断]';
+                    }
+                    tabElement.classList.add('disconnected');
+                }
+                
+                // 切断後の操作を処理するイベントリスナーを設定
+                this.setupDisconnectedTabHandlers(tabId);
+                
+                // 5秒後に自動で通知を表示
+                setTimeout(() => {
+                    this.showConnectionClosedNotification(tabId, message);
+                }, 1000);
+            }
+            
+            setupDisconnectedTabHandlers(tabId) {
+                const tab = this.tabs.get(tabId);
+                if (!tab || !tab.terminal) return;
+                
+                // シンプルなキーハンドラーを設定
+                tab.terminal.onData((data) => {
+                    const key = data.toLowerCase();
+                    if (key === 'r' || key === 'R') {
+                        // 再接続（タブを開き直し）
+                        this.reconnectTab(tabId);
+                    } else if (key === 'c' || key === 'C') {
+                        // タブを閉じる
+                        this.closeTab(tabId);
+                    } else if (key === '\r' || key === '\n') {
+                        // メニューを閉じる（何もしない）
+                        if (tab.terminal) {
+                            tab.terminal.write('\r\n');
+                        }
+                    }
+                });
+            }
+            
+            reconnectTab(tabId) {
+                const tab = this.tabs.get(tabId);
+                if (!tab) return;
+                
+                console.log(`Reconnecting tab ${tabId} for server ${tab.server.name} - closing and reopening tab`);
+                
+                // サーバー情報を保存
+                const serverInfo = tab.server;
+                
+                // 既存のタブを完全に閉じる
+                this.closeTab(tabId);
+                
+                // 少し待ってから新しいタブを作成
+                setTimeout(() => {
+                    console.log(`Creating new tab for server ${serverInfo.name} after reconnection`);
+                    this.createNewTab(serverInfo);
+                }, 200);
+            }
+            
+            showConnectionClosedNotification(tabId, message) {
+                // 設定で通知が有効な場合のみブラウザ通知を表示
+                if (this.settings.showNotifications && 'Notification' in window && Notification.permission === 'granted') {
+                    new Notification('SSH接続終了', {
+                        body: message,
+                        icon: '/static/favicon.ico'
+                    });
+                } else if (this.settings.showNotifications && 'Notification' in window && Notification.permission !== 'denied') {
+                    Notification.requestPermission().then(permission => {
+                        if (permission === 'granted') {
+                            new Notification('SSH接続終了', {
+                                body: message,
+                                icon: '/static/favicon.ico'
+                            });
+                        }
+                    });
+                }
+                
+                // タブが非アクティブの場合、タブタイトルで注意を引く
+                if (this.activeTabId !== tabId) {
+                    const tabElement = document.querySelector(`[data-tab-id="${tabId}"]`);
+                    if (tabElement) {
+                        tabElement.classList.add('needs-attention');
+                    }
+                }
+            }
+            
+            // 設定関連のメソッド
+            initializeSettings() {
+                // ローカルストレージから設定を読み込み
+                const savedSettings = localStorage.getItem('sshTerminalSettings');
+                if (savedSettings) {
+                    try {
+                        this.settings = { ...this.settings, ...JSON.parse(savedSettings) };
+                    } catch (e) {
+                        console.warn('設定の読み込みに失敗しました:', e);
+                    }
+                }
+                
+                // UIに設定を反映
+                this.updateSettingsUI();
+            }
+            
+            updateSettingsUI() {
+                document.getElementById('client-timeout').value = this.settings.clientTimeout;
+                document.getElementById('show-notifications').checked = this.settings.showNotifications;
+                document.getElementById('auto-reconnect').checked = this.settings.autoReconnect;
+            }
+            
+            toggleSettings() {
+                const panel = document.getElementById('settings-panel');
+                const isVisible = panel.style.display !== 'none';
+                
+                if (isVisible) {
+                    this.hideSettings();
+                } else {
+                    this.showSettings();
+                }
+            }
+            
+            showSettings() {
+                const panel = document.getElementById('settings-panel');
+                panel.style.display = 'block';
+                this.updateSettingsUI();
+                console.log('設定パネルを表示しました');
+            }
+            
+            hideSettings() {
+                const panel = document.getElementById('settings-panel');
+                panel.style.display = 'none';
+                console.log('設定パネルを非表示にしました');
+            }
+            
+            saveSettings() {
+                // UIから設定値を取得
+                const clientTimeout = parseInt(document.getElementById('client-timeout').value);
+                const showNotifications = document.getElementById('show-notifications').checked;
+                const autoReconnect = document.getElementById('auto-reconnect').checked;
+                
+                // バリデーション
+                if (clientTimeout < 1 || clientTimeout > 180) {
+                    alert('タイムアウト時間は1〜180分の範囲で設定してください');
+                    return;
+                }
+                
+                // 設定を更新
+                this.settings = {
+                    clientTimeout,
+                    showNotifications,
+                    autoReconnect
+                };
+                
+                // ローカルストレージに保存
+                try {
+                    localStorage.setItem('sshTerminalSettings', JSON.stringify(this.settings));
+                    console.log('設定を保存しました:', this.settings);
+                    
+                    // 保存成功メッセージ
+                    const saveBtn = document.getElementById('save-settings');
+                    const originalText = saveBtn.textContent;
+                    saveBtn.textContent = '保存完了!';
+                    saveBtn.style.backgroundColor = '#98c379';
+                    
+                    setTimeout(() => {
+                        saveBtn.textContent = originalText;
+                        saveBtn.style.backgroundColor = '#61dafb';
+                    }, 1500);
+                    
+                    // 設定パネルを閉じる
+                    setTimeout(() => {
+                        this.hideSettings();
+                    }, 800);
+                    
+                } catch (e) {
+                    console.error('設定の保存に失敗しました:', e);
+                    alert('設定の保存に失敗しました');
+                }
+            }
+            
+            checkTabConnections() {
+                const now = Date.now();
+                // クライアント都合のタイムアウト（設定値を使用）
+                // これは「ユーザーが一定時間操作しなかった時」のタイムアウト
+                const clientInactivityTimeout = this.settings.clientTimeout * 60 * 1000; // 分 → ミリ秒に変換
+                
+                this.tabs.forEach((tab, tabId) => {
+                    // 既に切断状態のタブはスキップ
+                    if (tab.status === 'disconnected') return;
+                    
+                    // 接続中（connecting）状態の間はタイムアウト判定をスキップ
+                    // SSH接続完了（connected）状態になってからタイムアウト監視を開始
+                    if (tab.status === 'connecting') {
+                        console.log(`Skipping timeout check for connecting tab ${tabId}`);
+                        return;
+                    }
+                    
+                    // connected状態でない場合もスキップ（エラー状態等）
+                    if (tab.status !== 'connected') {
+                        console.log(`Skipping timeout check for non-connected tab ${tabId} (status: ${tab.status})`);
+                        return;
+                    }
+                    
+                    // クライアント都合のタイムアウト判定（アクティブ/バックグラウンド関係なく30分）
+                    if (tab.lastActivity && (now - tab.lastActivity) > clientInactivityTimeout) {
+                        const timeSinceActivityMin = ((now - tab.lastActivity) / 60000).toFixed(1);
+                        console.log(`⚠️ Client inactivity timeout detected for tab ${tabId} (${timeSinceActivityMin}分 since last activity)`, {
+                            tabStatus: tab.status,
+                            lastActivity: new Date(tab.lastActivity).toISOString(),
+                            currentTime: new Date(now).toISOString(),
+                            timeDiff: timeSinceActivityMin + '分',
+                            timeoutReason: `クライアント都合（${this.settings.clientTimeout}分間無操作）`
+                        });
+                        
+                        // クライアントタイムアウト時は明示的にSSHセッションを切断
+                        console.log(`Closing SSH session due to client inactivity timeout for tab ${tabId}`);
+                        this.socket.emit('disconnect_ssh', { tab_id: tabId });
+                        
+                        this.handleSSHConnectionClosed(tabId, `クライアント無操作タイムアウト（${this.settings.clientTimeout}分間）`);
+                    }
                 });
             }
             

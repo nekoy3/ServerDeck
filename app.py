@@ -1,6 +1,8 @@
 import re
 import sys
 import logging
+import socket
+import select
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for, flash, send_from_directory, make_response
 from flask_socketio import SocketIO, emit
 from flask_session import Session
@@ -973,13 +975,104 @@ def handle_connect():
     app.logger.debug(f"Authenticated client connected! SID: {request.sid}, User: {session.get('username')}")
 
 def _ssh_read_loop(chan, sid):
-    while True:
-        if chan.recv_ready():
-            output = chan.recv(4096).decode('utf-8', errors='ignore')
-            socketio.emit('ssh_output', {'output': output}, room=sid)
-        elif chan.closed:
-            break
-        time.sleep(0.01)
+    """
+    従来のSSH用の読み取りループ（SSH接続タイムアウト監視付き）
+    
+    ※重要な区別※
+    - SSH接続タイムアウト: サーバー側でSSH接続自体が切断された時の検出（ここで処理）
+    - クライアント都合タイムアウト: フロントエンド側で30分間無操作時の切断（フロントエンドで処理）
+    """
+    try:
+        while True:
+            try:
+                # データが受信可能かチェック
+                if chan.recv_ready():
+                    output = chan.recv(4096).decode('utf-8', errors='ignore')
+                    if output:  # 空でない場合のみ送信
+                        socketio.emit('ssh_output', {'output': output}, room=sid)
+                
+                # 接続状態をチェック（複数の条件で判定）
+                if chan.closed or chan.eof_received or not chan.active:
+                    reason = "unknown"
+                    if chan.closed:
+                        reason = "closed"
+                    elif chan.eof_received:
+                        reason = "EOF"
+                    elif not chan.active:
+                        reason = "inactive"
+                    
+                    app.logger.debug(f"SSH channel terminated for SID: {sid}, reason: {reason}")
+                    update_ssh_status(sid, 'disconnected', 'SSH接続が終了しました', 0)
+                    socketio.emit('ssh_output', {'output': '\r\n[SSH接続が終了しました]\r\n'}, room=sid)
+                    socketio.emit('ssh_connection_closed', {'tab_id': sid, 'message': 'SSH接続が終了しました'}, room=sid)
+                    break
+                
+                # 終了状態をチェック
+                if chan.exit_status_ready():
+                    exit_status = chan.recv_exit_status()
+                    app.logger.debug(f"SSH session exited with status {exit_status} for SID: {sid}")
+                    update_ssh_status(sid, 'disconnected', f'SSH接続が終了しました (終了コード: {exit_status})', 0)
+                    socketio.emit('ssh_output', {'output': f'\r\n[SSH接続が終了しました (終了コード: {exit_status})]\r\n'}, room=sid)
+                    socketio.emit('ssh_connection_closed', {'tab_id': sid, 'message': f'SSH接続が終了しました (終了コード: {exit_status})'}, room=sid)
+                    break
+                
+                # 追加の接続チェック：recv を非ブロッキングで試行
+                try:
+                    # 0バイトの非ブロッキング読み取りで接続状態を確認
+                    test_read = chan.recv(0)  # 0バイト読み取り
+                    if test_read is None:  # Noneが返された場合、接続終了
+                        app.logger.debug(f"SSH channel recv returned None for SID: {sid}")
+                        update_ssh_status(sid, 'disconnected', 'SSH接続が終了しました (recv None)', 0)
+                        socketio.emit('ssh_output', {'output': '\r\n[SSH接続が終了しました]\r\n'}, room=sid)
+                        socketio.emit('ssh_connection_closed', {'tab_id': sid, 'message': 'SSH接続が終了しました'}, room=sid)
+                        break
+                except BlockingIOError:
+                    # ブロッキングIOエラーは正常（データがない）
+                    pass
+                except Exception as recv_e:
+                    # recv エラーは接続問題を示している可能性がある
+                    if "closed" in str(recv_e).lower() or "eof" in str(recv_e).lower():
+                        app.logger.debug(f"SSH recv error indicates connection closed for SID {sid}: {recv_e}")
+                        update_ssh_status(sid, 'disconnected', 'SSH接続が終了しました (recv error)', 0)
+                        socketio.emit('ssh_output', {'output': '\r\n[SSH接続が終了しました]\r\n'}, room=sid)
+                        socketio.emit('ssh_connection_closed', {'tab_id': sid, 'message': 'SSH接続が終了しました'}, room=sid)
+                        break
+                
+                time.sleep(0.01)
+                    
+            except socket.error as sock_e:
+                app.logger.debug(f"Socket error in SSH read loop for SID {sid}: {sock_e}")
+                update_ssh_status(sid, 'disconnected', f'SSH接続が終了しました (ソケットエラー)', 0)
+                socketio.emit('ssh_output', {'output': '\r\n[SSH接続が終了しました (ソケットエラー)]\r\n'}, room=sid)
+                socketio.emit('ssh_connection_closed', {'tab_id': sid, 'message': f'SSH接続が終了しました (ソケットエラー)'}, room=sid)
+                break
+            except Exception as loop_e:
+                # 予期しないエラーはログに記録して継続を試行
+                app.logger.debug(f"Loop error in SSH read loop for SID {sid}: {loop_e}")
+                # 特定のエラーの場合は終了
+                if any(keyword in str(loop_e).lower() for keyword in ['closed', 'eof', 'connection', 'broken']):
+                    app.logger.debug(f"Connection-related error detected for SID {sid}: {loop_e}")
+                    update_ssh_status(sid, 'disconnected', 'SSH接続が終了しました (接続エラー)', 0)
+                    socketio.emit('ssh_output', {'output': '\r\n[SSH接続が終了しました]\r\n'}, room=sid)
+                    socketio.emit('ssh_connection_closed', {'tab_id': sid, 'message': 'SSH接続が終了しました'}, room=sid)
+                    break
+                # それ以外は継続
+                continue
+                
+    except Exception as e:
+        app.logger.error(f"Error in SSH read loop for SID {sid}: {e}")
+        update_ssh_status(sid, 'error', 'SSH接続でエラーが発生しました', 0)
+        socketio.emit('ssh_output', {'output': f'\r\n[SSH接続エラー: {e}]\r\n'}, room=sid)
+        socketio.emit('ssh_connection_closed', {'tab_id': sid, 'message': f'SSH接続エラー: {e}'}, room=sid)
+    finally:
+        # セッションクリーンアップ
+        if sid in active_ssh_sessions:
+            try:
+                active_ssh_sessions[sid]['client'].close()
+            except:
+                pass
+            del active_ssh_sessions[sid]
+            app.logger.debug(f"SSH session cleaned up for SID: {sid}")
 
 @socketio.on('start_ssh')
 def handle_start_ssh(data):
@@ -1066,22 +1159,50 @@ def handle_start_ssh(data):
                     # SSH鍵認証で接続: 70%
                     update_ssh_status(sid, 'authenticating', f"SSH鍵で認証中...", 70)
                     
-                    # 基本的な接続パラメータ
+                    # 基本的な接続パラメータ（拡張タイムアウト監視付き）
                     connect_params = {
                         'hostname': hostname,
                         'port': port,
                         'username': username,
                         'pkey': key,
-                        'timeout': 10,
+                        'timeout': 8,  # 接続タイムアウトを短縮
                         'look_for_keys': False,
-                        'allow_agent': False
+                        'allow_agent': False,
+                        'auth_timeout': 5,  # 認証タイムアウト
+                        'banner_timeout': 5  # バナータイムアウト
                     }
                     
                     # SSH オプションから得られた追加パラメータをマージ
                     connect_params.update(ssh_connect_kwargs)
                     
-                    client.connect(**connect_params)
-                    app.logger.debug(f"SSH connected to {hostname} using key: {ssh_key_info['name']}")
+                    # 接続実行（詳細なタイムアウト監視付き）
+                    try:
+                        client.connect(**connect_params)
+                        app.logger.debug(f"SSH connected to {hostname} using key: {ssh_key_info['name']}")
+                        
+                        # 接続後の健全性テスト
+                        transport = client.get_transport()
+                        if not transport or not transport.is_active():
+                            raise Exception("SSH transport is not active after connection")
+                            
+                    except socket.timeout:
+                        app.logger.warning(f"SSH connection timeout to {hostname}:{port}")
+                        update_ssh_status(sid, 'error', f"接続タイムアウト ({hostname}:{port})", 0)
+                        emit('ssh_output', {'output': f"Connection timeout to {hostname}:{port}\r\n"})
+                        client.close()
+                        return
+                    except paramiko.AuthenticationException:
+                        app.logger.warning(f"SSH authentication failed to {hostname}")
+                        update_ssh_status(sid, 'error', f"認証に失敗しました", 0)
+                        emit('ssh_output', {'output': f"Authentication failed to {hostname}\r\n"})
+                        client.close()
+                        return
+                    except Exception as conn_e:
+                        app.logger.warning(f"SSH connection failed to {hostname}: {conn_e}")
+                        update_ssh_status(sid, 'error', f"接続に失敗しました: {str(conn_e)[:50]}", 0)
+                        emit('ssh_output', {'output': f"Connection failed to {hostname}: {conn_e}\r\n"})
+                        client.close()
+                        return
                 except paramiko.PasswordRequiredException:
                     app.logger.debug(f"Key '{ssh_key_info['name']}' requires passphrase.")
                     update_ssh_status(sid, 'error', f"SSH鍵 '{ssh_key_info['name']}' にパスフレーズが必要です", 0)
@@ -1105,20 +1226,48 @@ def handle_start_ssh(data):
             update_ssh_status(sid, 'authenticating', 'パスワードで認証中...', 50)
             
             app.logger.debug(f"Attempting password authentication for {hostname}")
-            # 基本的な接続パラメータ
+            # 基本的な接続パラメータ（拡張タイムアウト監視付き）
             connect_params = {
                 'hostname': hostname,
                 'port': port,
                 'username': username,
                 'password': password,
-                'timeout': 10
+                'timeout': 8,  # 接続タイムアウトを短縮
+                'auth_timeout': 5,  # 認証タイムアウト
+                'banner_timeout': 5  # バナータイムアウト
             }
             
             # SSH オプションから得られた追加パラメータをマージ
             connect_params.update(ssh_connect_kwargs)
             
-            client.connect(**connect_params)
-            app.logger.debug(f"SSH connected to {hostname} using password.")
+            # 接続実行（詳細なタイムアウト監視付き）
+            try:
+                client.connect(**connect_params)
+                app.logger.debug(f"SSH connected to {hostname} using password.")
+                
+                # 接続後の健全性テスト
+                transport = client.get_transport()
+                if not transport or not transport.is_active():
+                    raise Exception("SSH transport is not active after connection")
+                    
+            except socket.timeout:
+                app.logger.warning(f"SSH connection timeout to {hostname}:{port}")
+                update_ssh_status(sid, 'error', f"接続タイムアウト ({hostname}:{port})", 0)
+                emit('ssh_output', {'output': f"Connection timeout to {hostname}:{port}\r\n"})
+                client.close()
+                return
+            except paramiko.AuthenticationException:
+                app.logger.warning(f"SSH authentication failed to {hostname}")
+                update_ssh_status(sid, 'error', f"認証に失敗しました", 0)
+                emit('ssh_output', {'output': f"Authentication failed to {hostname}\r\n"})
+                client.close()
+                return
+            except Exception as conn_e:
+                app.logger.warning(f"SSH connection failed to {hostname}: {conn_e}")
+                update_ssh_status(sid, 'error', f"接続に失敗しました: {str(conn_e)[:50]}", 0)
+                emit('ssh_output', {'output': f"Connection failed to {hostname}: {conn_e}\r\n"})
+                client.close()
+                return
         else:
             app.logger.debug(f"No valid authentication method provided.")
             update_ssh_status(sid, 'error', f"認証情報が提供されていません", 0)
@@ -1170,6 +1319,55 @@ def handle_resize_terminal(data):
         cols = data.get('cols', 80)
         rows = data.get('rows', 24)
         chan.resize_pty(cols, rows)
+
+@socketio.on('disconnect_ssh')
+def handle_disconnect_ssh(data):
+    """特定のSSH接続を明示的に切断する（マルチタブ対応）"""
+    if not _is_authenticated():
+        return
+    sid = request.sid
+    tab_id = data.get('tab_id')
+    
+    app.logger.debug(f"Explicit SSH disconnect requested for SID: {sid}, tab_id: {tab_id}")
+    
+    # マルチタブSSHセッションの処理
+    if tab_id and tab_id in multitab_ssh_sessions:
+        try:
+            session_info = multitab_ssh_sessions[tab_id]
+            client = session_info['client']
+            chan = session_info['channel']
+            
+            # チャネルとクライアントを明示的に閉じる
+            if chan:
+                chan.close()
+            if client:
+                client.close()
+                
+            del multitab_ssh_sessions[tab_id]
+            app.logger.debug(f"Multi-tab SSH session explicitly closed for tab: {tab_id}")
+        except Exception as e:
+            app.logger.error(f"Error during explicit multi-tab SSH disconnect: {e}")
+    
+    # 従来のSSHセッションの処理（後方互換性）
+    if sid in active_ssh_sessions:
+        try:
+            client = active_ssh_sessions[sid]['client']
+            chan = active_ssh_sessions[sid]['channel']
+            
+            # チャネルとクライアントを明示的に閉じる
+            if chan:
+                chan.close()
+            if client:
+                client.close()
+                
+            del active_ssh_sessions[sid]
+            app.logger.debug(f"SSH session explicitly closed for SID: {sid}")
+        except Exception as e:
+            app.logger.error(f"Error during explicit SSH disconnect: {e}")
+    
+    # SSH接続状態をクリーンアップ
+    if sid in ssh_connection_status:
+        del ssh_connection_status[sid]
 
 @socketio.on('disconnect')
 def handle_disconnect():
@@ -1347,17 +1545,90 @@ def update_multitab_ssh_status(tab_id, status, message, progress):
     })
 
 def _multitab_ssh_read_loop(channel, tab_id):
-    """マルチタブSSH用の読み取りループ"""
-    while not channel.closed:
-        if channel.recv_ready():
-            output = channel.recv(4096).decode('utf-8', errors='ignore')
-            socketio.emit('ssh_output', {
-                'tab_id': tab_id,
-                'output': output
-            })
-        elif channel.closed:
-            break
-        time.sleep(0.01)
+    """
+    マルチタブSSH用の読み取りループ（Paramikoベースの SSH接続タイムアウト 監視付き）
+    
+    ※重要な区別※
+    - SSH接続タイムアウト: サーバー側でSSH接続自体が切断された時の検出（ここで処理）
+    - クライアント都合タイムアウト: フロントエンド側で30分間無操作時の切断（フロントエンドで処理）
+    """
+    consecutive_empty_reads = 0
+    max_empty_reads = 50  # 0.5秒 * 50 = 25秒で SSH接続タイムアウト 判定
+    read_timeout = 25.0  # 25秒でread操作をタイムアウト
+    
+    app.logger.debug(f"Starting SSH read loop for tab {tab_id} (monitoring SSH connection timeout)")
+    
+    try:
+        while not channel.closed:
+            try:
+                if channel.recv_ready():
+                    # データが利用可能な場合
+                    try:
+                        channel.settimeout(read_timeout)  # read操作にタイムアウトを設定
+                        output = channel.recv(4096).decode('utf-8', errors='ignore')
+                        if output:
+                            consecutive_empty_reads = 0  # データを受信したのでカウンターをリセット
+                            socketio.emit('ssh_output', {
+                                'tab_id': tab_id,
+                                'output': output
+                            })
+                        else:
+                            consecutive_empty_reads += 1
+                            app.logger.debug(f"Empty read #{consecutive_empty_reads} for tab {tab_id}")
+                    except socket.timeout:
+                        app.logger.warning(f"SSH read timeout for tab {tab_id}")
+                        consecutive_empty_reads += 10  # タイムアウトが発生した場合は大きくカウントを増やす
+                    except Exception as e:
+                        app.logger.error(f"SSH read error for tab {tab_id}: {e}")
+                        break
+                else:
+                    # データが利用可能でない場合
+                    consecutive_empty_reads += 1
+                    
+                # 連続して空読みが続く場合、接続の健全性をチェック
+                if consecutive_empty_reads >= max_empty_reads:
+                    app.logger.warning(f"Too many consecutive empty reads for tab {tab_id}, checking connection health")
+                    
+                    # Paramikoの内部状態をチェック
+                    transport = channel.get_transport()
+                    if transport is None or not transport.is_active():
+                        app.logger.warning(f"SSH transport is not active for tab {tab_id}")
+                        break
+                    
+                    # ping的なメッセージを送信して接続をテスト
+                    try:
+                        # ゼロバイトの送信を試す（接続テスト）
+                        channel.send('')
+                        consecutive_empty_reads = 0  # 成功したらリセット
+                        app.logger.debug(f"Connection test successful for tab {tab_id}")
+                    except Exception as e:
+                        app.logger.warning(f"Connection test failed for tab {tab_id}: {e}")
+                        break
+                
+                if channel.closed:
+                    break
+                    
+                time.sleep(0.01)
+                
+            except Exception as e:
+                app.logger.error(f"Unexpected error in SSH read loop for tab {tab_id}: {e}")
+                break
+                
+    except Exception as e:
+        app.logger.error(f"Fatal error in SSH read loop for tab {tab_id}: {e}")
+    finally:
+        app.logger.debug(f"SSH read loop ended for tab {tab_id}")
+        
+        # 接続が閉じられた場合、クライアントに通知
+        if tab_id in multitab_ssh_sessions:
+            try:
+                socketio.emit('ssh_connection_closed', {
+                    'tab_id': tab_id,
+                    'message': 'SSH接続が切断されました'
+                })
+                app.logger.debug(f"Sent connection closed event for tab {tab_id}")
+            except Exception as e:
+                app.logger.error(f"Error sending connection closed event for tab {tab_id}: {e}")
 
 @socketio.on('start_ssh_tab')
 def handle_start_ssh_tab(data):
@@ -1514,6 +1785,11 @@ def handle_start_ssh_tab(data):
         
         chan = client.invoke_shell()
         chan.settimeout(0.0)
+        
+        # シェル作成後の健全性チェック
+        time.sleep(0.1)  # 少し待ってからチェック
+        if chan.closed:
+            raise Exception("Shell channel was closed immediately after creation")
         
         # マルチタブセッション管理に追加
         multitab_ssh_sessions[tab_id] = {
