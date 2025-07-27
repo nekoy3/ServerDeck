@@ -303,4 +303,29 @@ body {
     font-weight: normal;
 }
 
+/* SSH接続ドロップダウンメニューのz-index調整 */
+.btn-group .dropdown-menu {
+    z-index: 9999 !important;
+    position: absolute !important;
+}
+
+/* SSH接続ボタンのドロップダウンが他の要素に隠れないようにする */
+.server-card .btn-group {
+    position: relative;
+    z-index: 100;
+}
+
+/* ドロップダウンが開いている時の設定 */
+.server-card .btn-group.show,
+.server-card .btn-group:has(.dropdown-menu.show) {
+    z-index: 9999 !important;
+}
+
+/* ドロップダウンメニューが表示されている間の設定 */
+.server-card .btn-group .dropdown-menu.show {
+    z-index: 9999 !important;
+    position: absolute !important;
+    display: block !important;
+}
+
 /* --- 既存のスタイル --- */

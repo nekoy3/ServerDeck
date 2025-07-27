@@ -100,6 +100,7 @@ os.makedirs(BACKUP_DIR, exist_ok=True)
 
 active_ssh_sessions = {}
 ssh_connection_status = {}  # 接続状態を追跡するための辞書
+multitab_ssh_sessions = {}  # マルチタブSSHセッション管理
 server_ping_status = {}
 
 # --- Config Loading/Saving ---
@@ -496,6 +497,12 @@ def config_page():
 @login_required
 def ssh_terminal(server_id):
     return render_template('ssh_terminal.html', server_id=server_id)
+
+@app.route('/ssh_multitab')
+@login_required
+def ssh_multitab():
+    server_id = request.args.get('server_id')
+    return render_template('ssh_terminal_multitab.html', initial_server_id=server_id)
 
 # --- Protected API Endpoints ---
 @app.route('/api/servers', methods=['GET'])
@@ -1328,6 +1335,309 @@ def organize_servers_hierarchy(servers):
             processed.add(server['id'])
     
     return organized
+
+# --- Multi-Tab SSH Handlers ---
+def update_multitab_ssh_status(tab_id, status, message, progress):
+    """マルチタブSSH接続の状態を更新"""
+    socketio.emit('ssh_status_update', {
+        'tab_id': tab_id,
+        'status': status,
+        'message': message,
+        'progress': progress
+    })
+
+def _multitab_ssh_read_loop(channel, tab_id):
+    """マルチタブSSH用の読み取りループ"""
+    while not channel.closed:
+        if channel.recv_ready():
+            output = channel.recv(4096).decode('utf-8', errors='ignore')
+            socketio.emit('ssh_output', {
+                'tab_id': tab_id,
+                'output': output
+            })
+        elif channel.closed:
+            break
+        time.sleep(0.01)
+
+@socketio.on('start_ssh_tab')
+def handle_start_ssh_tab(data):
+    """マルチタブSSH接続を開始"""
+    if not _is_authenticated():
+        emit('ssh_output', {'tab_id': data.get('tab_id'), 'output': 'Authentication required.\r\n'})
+        return
+    
+    server_id = data.get('server_id')
+    tab_id = data.get('tab_id')
+    sid = request.sid
+    
+    if not tab_id:
+        emit('ssh_output', {'tab_id': tab_id, 'output': 'Error: Tab ID is required.\r\n'})
+        return
+    
+    # 初期化: 接続開始状態
+    update_multitab_ssh_status(tab_id, 'initializing', 'SSH接続を開始しています...', 10)
+    
+    app.logger.debug(f"Received start_ssh_tab event. Tab ID: {tab_id}, Server ID: {server_id}, SID: {sid}")
+    
+    config = load_servers_config()
+    server_info = next((s for s in config.get('servers', []) if s['id'] == server_id), None)
+    
+    if not server_info:
+        app.logger.debug(f"Server '{server_id}' not found.")
+        update_multitab_ssh_status(tab_id, 'error', f"サーバー '{server_id}' が見つかりません", 0)
+        emit('ssh_output', {'tab_id': tab_id, 'output': f"Error: Server '{server_id}' not found in configuration.\r\n"})
+        return
+    
+    ssh_connectable_types = ['node', 'virtual_machine', 'network_device', 'kvm']
+    if server_info.get('type') not in ssh_connectable_types:
+        app.logger.debug(f"Server '{server_id}' is not an SSH connectable type server.")
+        update_multitab_ssh_status(tab_id, 'error', f"サーバー '{server_id}' はSSH接続できません", 0)
+        emit('ssh_output', {'tab_id': tab_id, 'output': f"Error: Server '{server_id}' is not an SSH connectable type server.\r\n"})
+        return
+    
+    # サーバー情報取得完了: 20%
+    update_multitab_ssh_status(tab_id, 'connecting', 'サーバー情報を取得しました', 20)
+    
+    try:
+        client = paramiko.SSHClient()
+        client.load_system_host_keys()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        
+        hostname = server_info.get('host')
+        port = server_info.get('port', 22)
+        username = server_info.get('username')
+        password = server_info.get('password')
+        ssh_key_id = server_info.get('ssh_key_id')
+        ssh_options = server_info.get('ssh_options', '')
+        
+        # SSH接続準備完了: 30%
+        update_multitab_ssh_status(tab_id, 'connecting', f'{hostname}:{port} に接続中...', 30)
+        
+        # SSH オプションを解析
+        ssh_connect_kwargs = parse_ssh_options(ssh_options)
+        app.logger.debug(f"SSH connection will use additional options: {ssh_connect_kwargs}")
+        
+        if ssh_key_id:
+            # SSH鍵認証の準備: 40%
+            update_multitab_ssh_status(tab_id, 'authenticating', 'SSH鍵を準備中...', 40)
+            
+            ssh_keys_config = load_ssh_keys_config()
+            ssh_key_info = next((k for k in ssh_keys_config.get('ssh_keys', []) if k['id'] == ssh_key_id), None)
+            app.logger.debug(f"Attempting to load key '{ssh_key_id}' with info: {ssh_key_info}")
+            
+            if ssh_key_info and os.path.exists(os.path.expanduser(ssh_key_info['path'])):
+                try:
+                    key_path_expanded = os.path.expanduser(ssh_key_info['path'])
+                    app.logger.debug(f"Expanded key path: {key_path_expanded}")
+                    
+                    # SSH鍵の読み込み: 50%
+                    update_multitab_ssh_status(tab_id, 'authenticating', f"SSH鍵 '{ssh_key_info['name']}' を読み込み中...", 50)
+                    
+                    try:
+                        key = paramiko.RSAKey.from_private_key_file(key_path_expanded)
+                    except paramiko.SSHException as e:
+                        app.logger.debug(f"RSAKey load failed: {e}. Attempting Ed25519Key.")
+                        try:
+                            key = paramiko.Ed25519Key(filename=key_path_expanded)
+                        except Exception as ed25519_e:
+                            app.logger.debug(f"Ed25519Key load failed: {ed25519_e}.")
+                            update_multitab_ssh_status(tab_id, 'error', f"SSH鍵の読み込みに失敗しました", 0)
+                            emit('ssh_output', {'tab_id': tab_id, 'output': f"Error loading SSH Key '{ssh_key_info['name']}': {e} (RSA) / {ed25519_e} (Ed25519)\r\n"})
+                            client.close()
+                            return
+                    
+                    # SSH鍵認証で接続: 70%
+                    update_multitab_ssh_status(tab_id, 'authenticating', f"SSH鍵で認証中...", 70)
+                    
+                    # 基本的な接続パラメータ
+                    connect_params = {
+                        'hostname': hostname,
+                        'port': port,
+                        'username': username,
+                        'pkey': key,
+                        'timeout': 10,
+                        'look_for_keys': False,
+                        'allow_agent': False
+                    }
+                    
+                    # SSH オプションから得られた追加パラメータをマージ
+                    connect_params.update(ssh_connect_kwargs)
+                    
+                    client.connect(**connect_params)
+                    app.logger.debug(f"SSH connected to {hostname} using key: {ssh_key_info['name']}")
+                except paramiko.PasswordRequiredException:
+                    app.logger.debug(f"Key '{ssh_key_info['name']}' requires passphrase.")
+                    update_multitab_ssh_status(tab_id, 'error', f"SSH鍵 '{ssh_key_info['name']}' にパスフレーズが必要です", 0)
+                    emit('ssh_output', {'tab_id': tab_id, 'output': f"Error: SSH Key '{ssh_key_info['name']}' requires a passphrase.\r\n"})
+                    client.close()
+                    return
+                except Exception as e:
+                    app.logger.debug(f"Error loading SSH Key '{ssh_key_info['name']}': {e}")
+                    update_multitab_ssh_status(tab_id, 'error', f"SSH鍵 '{ssh_key_info['name']}' の読み込みエラー", 0)
+                    emit('ssh_output', {'tab_id': tab_id, 'output': f"Error loading SSH Key '{ssh_key_info['name']}': {e}\r\n"})
+                    client.close()
+                    return
+            else:
+                app.logger.debug(f"SSH Key '{ssh_key_id}' not found or path invalid (info: {ssh_key_info}).")
+                update_multitab_ssh_status(tab_id, 'error', f"SSH鍵 '{ssh_key_id}' が見つかりません", 0)
+                emit('ssh_output', {'tab_id': tab_id, 'output': f"Error: SSH Key '{ssh_key_id}' not found or path invalid.\r\n"})
+                client.close()
+                return
+        elif password:
+            # パスワード認証: 50%
+            update_multitab_ssh_status(tab_id, 'authenticating', 'パスワードで認証中...', 50)
+            
+            app.logger.debug(f"Attempting password authentication for {hostname}")
+            # 基本的な接続パラメータ
+            connect_params = {
+                'hostname': hostname,
+                'port': port,
+                'username': username,
+                'password': password,
+                'timeout': 10
+            }
+            
+            # SSH オプションから得られた追加パラメータをマージ
+            connect_params.update(ssh_connect_kwargs)
+            
+            client.connect(**connect_params)
+            app.logger.debug(f"SSH connected to {hostname} using password.")
+        else:
+            app.logger.debug(f"No valid authentication method provided.")
+            update_multitab_ssh_status(tab_id, 'error', f"認証情報が提供されていません", 0)
+            emit('ssh_output', {'tab_id': tab_id, 'output': "Error: No valid authentication method (password or SSH key) provided.\r\n"})
+            client.close()
+            return
+        
+        # シェルセッション作成: 90%
+        update_multitab_ssh_status(tab_id, 'connecting', 'シェルセッションを作成中...', 90)
+        
+        chan = client.invoke_shell()
+        chan.settimeout(0.0)
+        
+        # マルチタブセッション管理に追加
+        multitab_ssh_sessions[tab_id] = {
+            'client': client,
+            'channel': chan,
+            'sid': sid,
+            'server_info': server_info
+        }
+        
+        # 接続完了: 100%
+        update_multitab_ssh_status(tab_id, 'connected', f'{hostname} に接続完了', 100)
+        
+        emit('ssh_output', {'tab_id': tab_id, 'output': f"Successfully connected to {hostname}.\r\n"})
+        threading.Thread(target=_multitab_ssh_read_loop, args=(chan, tab_id), daemon=True).start()
+        
+    except paramiko.AuthenticationException:
+        app.logger.debug(f"Authentication failed for {hostname}.")
+        update_multitab_ssh_status(tab_id, 'error', f"認証に失敗しました", 0)
+        emit('ssh_output', {'tab_id': tab_id, 'output': "Authentication failed. Please check your credentials.\r\n"})
+    except paramiko.SSHException as e:
+        app.logger.debug(f"SSH error for {hostname}: {e}")
+        update_multitab_ssh_status(tab_id, 'error', f"SSH接続エラー: {e}", 0)
+        emit('ssh_output', {'tab_id': tab_id, 'output': f"SSH error: {e}\r\n"})
+    except Exception as e:
+        app.logger.debug(f"General connection error for {hostname}: {e}")
+        update_multitab_ssh_status(tab_id, 'error', f"接続エラー: {e}", 0)
+        emit('ssh_output', {'tab_id': tab_id, 'output': f"Connection error: {e}\r\n"})
+
+@socketio.on('ssh_input')
+def handle_ssh_input(data):
+    """SSH入力処理（既存の単一タブとマルチタブの両方に対応）"""
+    if not _is_authenticated():
+        return
+    sid = request.sid
+    tab_id = data.get('tab_id')
+    
+    if tab_id:
+        # マルチタブモード
+        if tab_id in multitab_ssh_sessions:
+            chan = multitab_ssh_sessions[tab_id]['channel']
+            chan.send(data['input'])
+    else:
+        # 既存の単一タブモード
+        if sid in active_ssh_sessions:
+            chan = active_ssh_sessions[sid]['channel']
+            chan.send(data['input'])
+
+@socketio.on('resize_terminal')
+def handle_resize_terminal(data):
+    """ターミナルリサイズ処理（既存の単一タブとマルチタブの両方に対応）"""
+    if not _is_authenticated():
+        return
+    sid = request.sid
+    tab_id = data.get('tab_id')
+    cols = data.get('cols', 80)
+    rows = data.get('rows', 24)
+    
+    if tab_id:
+        # マルチタブモード
+        if tab_id in multitab_ssh_sessions:
+            chan = multitab_ssh_sessions[tab_id]['channel']
+            chan.resize_pty(cols, rows)
+    else:
+        # 既存の単一タブモード
+        if sid in active_ssh_sessions:
+            chan = active_ssh_sessions[sid]['channel']
+            chan.resize_pty(cols, rows)
+
+@socketio.on('close_ssh_tab')
+def handle_close_ssh_tab(data):
+    """特定のSSHタブを閉じる"""
+    if not _is_authenticated():
+        return
+    
+    tab_id = data.get('tab_id')
+    if not tab_id:
+        return
+    
+    app.logger.debug(f"Closing SSH tab: {tab_id}")
+    
+    if tab_id in multitab_ssh_sessions:
+        session_info = multitab_ssh_sessions[tab_id]
+        client = session_info['client']
+        
+        try:
+            client.close()
+            app.logger.debug(f"SSH client closed for tab: {tab_id}")
+        except Exception as e:
+            app.logger.debug(f"Error closing SSH client for tab {tab_id}: {e}")
+        
+        del multitab_ssh_sessions[tab_id]
+        app.logger.debug(f"SSH tab session removed: {tab_id}")
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    """クライアント切断処理（既存の単一タブとマルチタブの両方に対応）"""
+    sid = request.sid
+    app.logger.debug(f"Client disconnected (SID: {sid})")
+    
+    # 既存の単一タブセッションの処理
+    if sid in active_ssh_sessions:
+        client = active_ssh_sessions[sid]['client']
+        client.close()
+        del active_ssh_sessions[sid]
+        app.logger.debug(f"SSH session closed for SID: {sid}")
+    
+    # SSH接続状態をクリーンアップ
+    if sid in ssh_connection_status:
+        del ssh_connection_status[sid]
+    
+    # マルチタブセッションの処理
+    tabs_to_close = []
+    for tab_id, session_info in multitab_ssh_sessions.items():
+        if session_info['sid'] == sid:
+            tabs_to_close.append(tab_id)
+    
+    for tab_id in tabs_to_close:
+        try:
+            client = multitab_ssh_sessions[tab_id]['client']
+            client.close()
+            del multitab_ssh_sessions[tab_id]
+            app.logger.debug(f"Multi-tab SSH session closed for tab: {tab_id}")
+        except Exception as e:
+            app.logger.debug(f"Error closing multi-tab SSH session {tab_id}: {e}")
 
 if __name__ == '__main__':
     # Extra import のスケジュール開始

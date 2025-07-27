@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SSH Terminal - Multi Tab</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@4.11.0/css/xterm.css" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #282c34;
+            color: #abb2bf;
+            font-family: monospace;
+            overflow: hidden;
+        }
+        
+        .terminal-layout {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+        
+        /* タブヘッダー */
+        .tab-header {
+            background-color: #21252b;
+            border-bottom: 1px solid #3e4451;
+            padding: 0;
+            min-height: 50px;
+            display: flex;
+            align-items: center;
+        }
+        
+        .tab-nav {
+            flex: 1;
+            display: flex;
+            overflow-x: auto;
+            scrollbar-width: thin;
+        }
+        
+        .tab-nav::-webkit-scrollbar {
+            height: 3px;
+        }
+        
+        .tab-nav::-webkit-scrollbar-track {
+            background: #21252b;
+        }
+        
+        .tab-nav::-webkit-scrollbar-thumb {
+            background: #3e4451;
+            border-radius: 3px;
+        }
+        
+        .tab-item {
+            background-color: #2c313c;
+            border: 1px solid #3e4451;
+            border-bottom: none;
+            color: #abb2bf;
+            padding: 8px 15px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            min-width: 150px;
+            max-width: 200px;
+            position: relative;
+            border-radius: 8px 8px 0 0;
+            margin-right: 2px;
+            white-space: nowrap;
+        }
+        
+        .tab-item.active {
+            background-color: #282c34;
+            border-bottom: 1px solid #282c34;
+            color: #61dafb;
+        }
+        
+        .tab-item:hover:not(.active) {
+            background-color: #3e4451;
+        }
+        
+        .tab-title {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            font-size: 13px;
+        }
+        
+        .tab-status {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 8px;
+            flex-shrink: 0;
+        }
+        
+        .tab-status.connecting {
+            background-color: #e5c07b;
+            animation: pulse 1s infinite;
+        }
+        
+        .tab-status.connected {
+            background-color: #98c379;
+        }
+        
+        .tab-status.error {
+            background-color: #e06c75;
+        }
+        
+        .tab-close {
+            background: none;
+            border: none;
+            color: #abb2bf;
+            cursor: pointer;
+            padding: 2px 5px;
+            margin-left: 8px;
+            border-radius: 3px;
+            flex-shrink: 0;
+        }
+        
+        .tab-close:hover {
+            background-color: #e06c75;
+            color: white;
+        }
+        
+        .tab-actions {
+            padding: 0 15px;
+            display: flex;
+            gap: 10px;
+        }
+        
+        .tab-actions button {
+            background-color: #3e4451;
+            border: 1px solid #5c6370;
+            color: #abb2bf;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        
+        .tab-actions button:hover {
+            background-color: #4f5765;
+        }
+        
+        /* ターミナルコンテンツ */
+        .terminal-content {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .terminal-pane {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: none;
+            flex-direction: column;
+        }
+        
+        .terminal-pane.active {
+            display: flex;
+        }
+        
+        .connection-status {
+            background-color: #21252b;
+            padding: 15px;
+            margin: 10px;
+            border-radius: 8px;
+            border: 1px solid #3e4451;
+            display: none;
+        }
+        
+        .connection-status.show {
+            display: block;
+        }
+        
+        .status-header {
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #61dafb;
+        }
+        
+        .status-message {
+            margin-bottom: 10px;
+            color: #abb2bf;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background-color: #3e4451;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #61dafb, #98c379);
+            border-radius: 4px;
+            transition: width 0.3s ease;
+            width: 0%;
+        }
+        
+        .terminal-wrapper {
+            flex: 1;
+            margin: 10px;
+            background-color: #1e2227;
+            border-radius: 8px;
+            border: 1px solid #3e4451;
+            overflow: hidden;
+        }
+        
+        .status-connecting {
+            border-left: 4px solid #e5c07b;
+        }
+        
+        .status-connected {
+            border-left: 4px solid #98c379;
+        }
+        
+        .status-error {
+            border-left: 4px solid #e06c75;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        /* 新しいタブボタン */
+        .new-tab-btn {
+            background-color: #3e4451 !important;
+            border: 1px solid #5c6370 !important;
+            color: #abb2bf !important;
+            font-size: 16px !important;
+            width: 35px !important;
+            height: 35px !important;
+            padding: 0 !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+        }
+        
+        .new-tab-btn:hover {
+            background-color: #4f5765 !important;
+        }
+        
+        /* レスポンシブ対応 */
+        @media (max-width: 768px) {
+            .tab-item {
+                min-width: 120px;
+                max-width: 150px;
+            }
+            
+            .tab-title {
+                font-size: 12px;
+            }
+            
+            .tab-actions {
+                padding: 0 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="terminal-layout">
+        <!-- タブヘッダー -->
+        <div class="tab-header">
+            <div class="tab-nav" id="tab-nav">
+                <!-- タブがここに動的に追加される -->
+            </div>
+            <div class="tab-actions">
+                <button class="new-tab-btn" id="new-tab-btn" title="新しいタブを開く">+</button>
+                <button id="close-all-btn" title="すべてのタブを閉じる">すべて閉じる</button>
+            </div>
+        </div>
+        
+        <!-- ターミナルコンテンツ -->
+        <div class="terminal-content" id="terminal-content">
+            <!-- ターミナルペインがここに動的に追加される -->
+        </div>
+    </div>
+
+    <!-- サーバー選択モーダル -->
+    <div class="modal fade" id="serverSelectModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content bg-dark text-light">
+                <div class="modal-header">
+                    <h5 class="modal-title">サーバーを選択</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="server-search" class="form-label">サーバー検索</label>
+                        <input type="text" class="form-control bg-secondary text-light" id="server-search" placeholder="サーバー名を入力...">
+                    </div>
+                    <div id="server-list" class="list-group">
+                        <!-- サーバーリストがここに動的に読み込まれる -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm@4.11.0/lib/xterm.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.5.0/lib/xterm-addon-fit.js"></script>
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+    <script>
+        class SSHMultiTab {
+            constructor() {
+                this.tabs = new Map();
+                this.activeTabId = null;
+                this.tabCounter = 0;
+                this.socket = io();
+                
+                this.initializeSocket();
+                this.initializeEventListeners();
+                this.loadServers();
+            }
+            
+            initializeSocket() {
+                this.socket.on('connect', () => {
+                    console.log('Connected to WebSocket');
+                });
+                
+                this.socket.on('ssh_status_update', (data) => {
+                    this.updateTabStatus(data.tab_id, data);
+                });
+                
+                this.socket.on('ssh_output', (data) => {
+                    this.writeToTerminal(data.tab_id, data.output);
+                });
+                
+                this.socket.on('disconnect', () => {
+                    console.log('Disconnected from WebSocket');
+                    this.handleDisconnection();
+                });
+            }
+            
+            initializeEventListeners() {
+                document.getElementById('new-tab-btn').addEventListener('click', () => {
+                    this.showServerSelectModal();
+                });
+                
+                document.getElementById('close-all-btn').addEventListener('click', () => {
+                    this.closeAllTabs();
+                });
+                
+                document.getElementById('server-search').addEventListener('input', (e) => {
+                    this.filterServers(e.target.value);
+                });
+                
+                window.addEventListener('resize', () => {
+                    this.resizeActiveTerminal();
+                });
+                
+                // キーボードショートカット
+                document.addEventListener('keydown', (e) => {
+                    if (e.ctrlKey || e.metaKey) {
+                        if (e.key === 't') {
+                            e.preventDefault();
+                            this.showServerSelectModal();
+                        } else if (e.key === 'w') {
+                            e.preventDefault();
+                            this.closeActiveTab();
+                        } else if (e.key >= '1' && e.key <= '9') {
+                            e.preventDefault();
+                            this.switchToTab(parseInt(e.key) - 1);
+                        }
+                    }
+                });
+                
+                // URL変更を監視してサーバーを自動追加
+                window.addEventListener('popstate', () => {
+                    this.checkForAutoConnect();
+                });
+                
+                // 他の画面からのメッセージを監視
+                window.addEventListener('message', (event) => {
+                    if (event.data && (event.data.type === 'ADD_SSH_TAB' || event.data.type === 'add_server_tab')) {
+                        const serverId = event.data.serverId;
+                        console.log('Received ADD_SSH_TAB message for server:', serverId);
+                        this.addServerTab(serverId);
+                    }
+                });
+            }
+            
+            checkForAutoConnect() {
+                const urlParams = new URLSearchParams(window.location.search);
+                const autoConnectServerId = urlParams.get('server_id');
+                
+                if (autoConnectServerId) {
+                    // 既に同じサーバーのタブが開かれているかチェック
+                    let existingTab = null;
+                    for (const [tabId, tab] of this.tabs) {
+                        if (tab.server.id === autoConnectServerId) {
+                            existingTab = tabId;
+                            break;
+                        }
+                    }
+                    
+                    if (existingTab) {
+                        // 既存のタブにフォーカス
+                        this.switchToTab(existingTab);
+                    } else {
+                        // 新しいタブを作成
+                        this.addServerTab(autoConnectServerId);
+                    }
+                }
+            }
+            
+            async loadServers() {
+                try {
+                    console.log('Loading servers...');
+                    const response = await fetch('/api/servers');
+                    const servers = await response.json();
+                    console.log('Servers loaded:', servers.length);
+                    this.renderServerList(servers);
+                    return servers; // サーバー一覧を返す
+                } catch (error) {
+                    console.error('Failed to load servers:', error);
+                    throw error; // エラーを再スロー
+                }
+            }
+            
+            renderServerList(servers) {
+                const serverList = document.getElementById('server-list');
+                serverList.innerHTML = '';
+                
+                servers.forEach(server => {
+                    const serverItem = document.createElement('div');
+                    serverItem.className = 'list-group-item list-group-item-action bg-secondary text-light';
+                    serverItem.style.cursor = 'pointer';
+                    serverItem.innerHTML = `
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="mb-1">${server.name}</h6>
+                                <small>${server.host}:${server.port}</small>
+                            </div>
+                            <small class="text-muted">${server.tag || 'No tag'}</small>
+                        </div>
+                    `;
+                    
+                    serverItem.addEventListener('click', () => {
+                        this.createNewTab(server);
+                        bootstrap.Modal.getInstance(document.getElementById('serverSelectModal')).hide();
+                    });
+                    
+                    serverList.appendChild(serverItem);
+                });
+            }
+            
+            filterServers(searchTerm) {
+                const serverItems = document.querySelectorAll('#server-list .list-group-item');
+                serverItems.forEach(item => {
+                    const serverName = item.querySelector('h6').textContent.toLowerCase();
+                    const serverHost = item.querySelector('small').textContent.toLowerCase();
+                    const visible = serverName.includes(searchTerm.toLowerCase()) || 
+                                   serverHost.includes(searchTerm.toLowerCase());
+                    item.style.display = visible ? 'block' : 'none';
+                });
+            }
+            
+            createNewTab(server) {
+                const tabId = `tab-${++this.tabCounter}`;
+                const tab = {
+                    id: tabId,
+                    server: server,
+                    terminal: new Terminal(),
+                    fitAddon: new FitAddon.FitAddon(),
+                    status: 'connecting'
+                };
+                
+                // ターミナルの設定
+                tab.terminal.loadAddon(tab.fitAddon);
+                
+                // タブUI作成
+                this.createTabUI(tab);
+                this.createTerminalPane(tab);
+                
+                // タブを管理マップに追加
+                this.tabs.set(tabId, tab);
+                
+                // タブをアクティブにする
+                this.switchToTab(tabId);
+                
+                // SSH接続開始
+                this.socket.emit('start_ssh_tab', {
+                    tab_id: tabId,
+                    server_id: server.id
+                });
+                
+                return tabId;
+            }
+            
+            createTabUI(tab) {
+                const tabNav = document.getElementById('tab-nav');
+                const tabElement = document.createElement('div');
+                tabElement.className = 'tab-item';
+                tabElement.setAttribute('data-tab-id', tab.id);
+                
+                tabElement.innerHTML = `
+                    <div class="tab-status connecting"></div>
+                    <div class="tab-title" title="${tab.server.name} (${tab.server.host})">${tab.server.name}</div>
+                    <button class="tab-close" title="タブを閉じる">×</button>
+                `;
+                
+                // タブクリックイベント
+                tabElement.addEventListener('click', (e) => {
+                    if (!e.target.classList.contains('tab-close')) {
+                        this.switchToTab(tab.id);
+                    }
+                });
+                
+                // タブ閉じるイベント
+                tabElement.querySelector('.tab-close').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.closeTab(tab.id);
+                });
+                
+                tabNav.appendChild(tabElement);
+            }
+            
+            createTerminalPane(tab) {
+                const terminalContent = document.getElementById('terminal-content');
+                const pane = document.createElement('div');
+                pane.className = 'terminal-pane';
+                pane.setAttribute('data-tab-id', tab.id);
+                
+                pane.innerHTML = `
+                    <div class="connection-status" id="connection-status-${tab.id}">
+                        <div class="status-header">SSH接続中...</div>
+                        <div class="status-message" id="status-message-${tab.id}">サーバーに接続しています...</div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progress-fill-${tab.id}"></div>
+                        </div>
+                    </div>
+                    <div class="terminal-wrapper">
+                        <div id="terminal-${tab.id}"></div>
+                    </div>
+                `;
+                
+                terminalContent.appendChild(pane);
+                
+                // ターミナルを初期化
+                tab.terminal.open(document.getElementById(`terminal-${tab.id}`));
+                tab.fitAddon.fit();
+                
+                // ターミナル入力イベント
+                tab.terminal.onData((data) => {
+                    if (this.activeTabId === tab.id) {
+                        this.socket.emit('ssh_input', { 
+                            tab_id: tab.id,
+                            input: data 
+                        });
+                    }
+                });
+            }
+            
+            switchToTab(tabIdOrIndex) {
+                let tabId;
+                
+                if (typeof tabIdOrIndex === 'number') {
+                    // インデックスから取得
+                    const tabIds = Array.from(this.tabs.keys());
+                    if (tabIdOrIndex < tabIds.length) {
+                        tabId = tabIds[tabIdOrIndex];
+                    } else {
+                        return;
+                    }
+                } else {
+                    tabId = tabIdOrIndex;
+                }
+                
+                if (!this.tabs.has(tabId)) return;
+                
+                // 前のアクティブタブを非アクティブに
+                if (this.activeTabId) {
+                    const prevTabElement = document.querySelector(`[data-tab-id="${this.activeTabId}"]`);
+                    const prevPaneElement = document.querySelector(`.terminal-pane[data-tab-id="${this.activeTabId}"]`);
+                    if (prevTabElement) prevTabElement.classList.remove('active');
+                    if (prevPaneElement) prevPaneElement.classList.remove('active');
+                }
+                
+                // 新しいタブをアクティブに
+                const tabElement = document.querySelector(`[data-tab-id="${tabId}"]`);
+                const paneElement = document.querySelector(`.terminal-pane[data-tab-id="${tabId}"]`);
+                
+                if (tabElement) tabElement.classList.add('active');
+                if (paneElement) paneElement.classList.add('active');
+                
+                this.activeTabId = tabId;
+                
+                // ターミナルにフォーカス
+                const tab = this.tabs.get(tabId);
+                if (tab && tab.terminal) {
+                    setTimeout(() => {
+                        tab.fitAddon.fit();
+                        tab.terminal.focus();
+                    }, 50);
+                }
+            }
+            
+            closeTab(tabId) {
+                if (!this.tabs.has(tabId)) return;
+                
+                // SSH接続終了を通知
+                this.socket.emit('close_ssh_tab', { tab_id: tabId });
+                
+                // UIから削除
+                const tabElement = document.querySelector(`[data-tab-id="${tabId}"]`);
+                const paneElement = document.querySelector(`.terminal-pane[data-tab-id="${tabId}"]`);
+                
+                if (tabElement) tabElement.remove();
+                if (paneElement) paneElement.remove();
+                
+                // タブを管理から削除
+                const tab = this.tabs.get(tabId);
+                if (tab && tab.terminal) {
+                    tab.terminal.dispose();
+                }
+                this.tabs.delete(tabId);
+                
+                // アクティブタブが閉じられた場合
+                if (this.activeTabId === tabId) {
+                    this.activeTabId = null;
+                    
+                    // 他のタブがあれば最初のタブをアクティブに
+                    if (this.tabs.size > 0) {
+                        const firstTabId = this.tabs.keys().next().value;
+                        this.switchToTab(firstTabId);
+                    }
+                }
+            }
+            
+            closeActiveTab() {
+                if (this.activeTabId) {
+                    this.closeTab(this.activeTabId);
+                }
+            }
+            
+            closeAllTabs() {
+                if (confirm('すべてのタブを閉じますか？')) {
+                    const tabIds = Array.from(this.tabs.keys());
+                    tabIds.forEach(tabId => this.closeTab(tabId));
+                }
+            }
+            
+            updateTabStatus(tabId, statusData) {
+                const tab = this.tabs.get(tabId);
+                if (!tab) return;
+                
+                tab.status = statusData.status;
+                
+                // タブステータス更新
+                const tabElement = document.querySelector(`[data-tab-id="${tabId}"]`);
+                if (tabElement) {
+                    const statusElement = tabElement.querySelector('.tab-status');
+                    statusElement.className = `tab-status ${statusData.status}`;
+                }
+                
+                // 接続状態表示更新
+                const connectionStatus = document.getElementById(`connection-status-${tabId}`);
+                const statusMessage = document.getElementById(`status-message-${tabId}`);
+                const progressFill = document.getElementById(`progress-fill-${tabId}`);
+                
+                if (connectionStatus && statusMessage && progressFill) {
+                    connectionStatus.className = `connection-status show status-${statusData.status}`;
+                    statusMessage.textContent = statusData.message;
+                    progressFill.style.width = statusData.progress + '%';
+                    
+                    // 接続完了時は状態表示を非表示に
+                    if (statusData.status === 'connected') {
+                        setTimeout(() => {
+                            connectionStatus.classList.remove('show');
+                        }, 2000);
+                    }
+                }
+            }
+            
+            writeToTerminal(tabId, output) {
+                const tab = this.tabs.get(tabId);
+                if (tab && tab.terminal) {
+                    tab.terminal.write(output);
+                }
+            }
+            
+            resizeActiveTerminal() {
+                if (this.activeTabId) {
+                    const tab = this.tabs.get(this.activeTabId);
+                    if (tab && tab.fitAddon) {
+                        tab.fitAddon.fit();
+                        this.socket.emit('resize_terminal', {
+                            tab_id: this.activeTabId,
+                            cols: tab.terminal.cols,
+                            rows: tab.terminal.rows
+                        });
+                    }
+                }
+            }
+            
+            showServerSelectModal() {
+                const modal = new bootstrap.Modal(document.getElementById('serverSelectModal'));
+                modal.show();
+                
+                // 検索フィールドをクリア
+                document.getElementById('server-search').value = '';
+                this.filterServers('');
+            }
+            
+            handleDisconnection() {
+                this.tabs.forEach((tab, tabId) => {
+                    if (tab.terminal) {
+                        tab.terminal.write('\r\nDisconnected from server.\r\n');
+                    }
+                    this.updateTabStatus(tabId, {
+                        status: 'error',
+                        message: 'サーバーから切断されました',
+                        progress: 0
+                    });
+                });
+            }
+            
+            // 外部からサーバーを追加する機能
+            addServerTab(serverId) {
+                console.log('Adding server tab for ID:', serverId);
+                fetch('/api/servers')
+                    .then(response => response.json())
+                    .then(servers => {
+                        console.log('Found servers:', servers.length);
+                        const server = servers.find(s => s.id === serverId);
+                        if (server) {
+                            console.log('Server found, creating tab:', server.name);
+                            this.createNewTab(server);
+                        } else {
+                            console.warn('Server not found for external add:', serverId);
+                            console.log('Available server IDs:', servers.map(s => s.id));
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Failed to load server for external add:', error);
+                    });
+            }
+        }
+        
+        // グローバル変数として定義
+        let sshMultiTab;
+        
+        // アプリケーション開始
+        document.addEventListener('DOMContentLoaded', () => {
+            sshMultiTab = new SSHMultiTab();
+            
+            // サーバー一覧の読み込みが完了してから自動接続をチェック
+            sshMultiTab.loadServers().then(() => {
+                // URLパラメータをチェックして自動接続
+                const urlParams = new URLSearchParams(window.location.search);
+                const autoConnectServerId = urlParams.get('server_id');
+                
+                if (autoConnectServerId) {
+                    console.log('Auto-connecting to server ID:', autoConnectServerId);
+                    
+                    // addServerTabメソッドを使用して接続
+                    sshMultiTab.addServerTab(autoConnectServerId);
+                    
+                    // URLからserver_idパラメータを削除（履歴を汚さないため）
+                    const newUrl = new URL(window.location);
+                    newUrl.searchParams.delete('server_id');
+                    window.history.replaceState({}, document.title, newUrl.toString());
+                }
+            }).catch(error => {
+                console.error('Failed to load servers:', error);
+            });
+        });
+    </script>
+</body>
+</html>

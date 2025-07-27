@@ -37,13 +37,20 @@ window.ServerManagement = {
                                 // 通常のサーバーはSSH接続ボタンのみ
                                 const sshConnectableTypes = ['node', 'virtual_machine', 'network_device', 'kvm'];
                                 if (sshConnectableTypes.includes(server.type)) {
-                                    buttonsHtml = `<a href="/ssh/${server.id}" class="btn btn-sm btn-primary" target="_blank">SSH接続</a>`;
+                                    buttonsHtml = `<button class="btn btn-sm btn-primary ssh-connect-btn" data-server-id="${server.id}">SSH接続</button>`;
                                 }
                             }
                             cardFooter.innerHTML = buttonsHtml;
                         }
                     }
                 });
+
+                // 動的に生成されたドロップダウンを初期化（不要になった）
+                // console.log('🔍 About to call reinitializeDropdowns...');
+                // this.reinitializeDropdowns();
+
+                // SSH接続ボタンのイベントリスナーを再アタッチ
+                this.attachSSHEventListeners();
 
                 // イベントリスナーを再アタッチ
                 // サーバーカードの更新後、必要に応じてイベントリスナーを再設定
@@ -341,5 +348,146 @@ window.ServerManagement = {
                 });
             });
         }
+    },
+
+    // SSH接続ボタンのイベントリスナーを設定
+    attachSSHEventListeners: function() {
+        console.log('🔧 Attaching SSH event listeners...');
+        
+        // SSH接続ボタンのイベントリスナー
+        document.querySelectorAll('.ssh-connect-btn').forEach(button => {
+            // 既存のリスナーを削除してから新しいリスナーを追加
+            button.removeEventListener('click', this.handleSSHConnectClick);
+            button.addEventListener('click', this.handleSSHConnectClick.bind(this));
+        });
+        
+        console.log(`🔧 SSH event listeners attached to ${document.querySelectorAll('.ssh-connect-btn').length} buttons`);
+    },
+
+    // SSH接続ボタンのクリックハンドラー
+    handleSSHConnectClick: function(event) {
+        event.preventDefault();
+        console.log('🔧 SSH connect button clicked:', event.target);
+        
+        const serverId = event.target.dataset.serverId;
+        if (!serverId) {
+            console.error('❌ Server ID not found in SSH connect button');
+            return;
+        }
+        
+        console.log('🔧 Opening SSH connection for server (multi-tab mode):', serverId);
+        
+        // 新規タブでマルチタブ対応のSSH接続を開く
+        const sshUrl = `/ssh_multitab?server_id=${serverId}`;
+        window.open(sshUrl, '_blank');
+    },
+
+    // 動的に生成されたドロップダウンを再初期化する
+    reinitializeDropdowns: function() {
+        console.log('🔄 ===== REINITIALIZE DROPDOWNS START =====');
+        console.log('🔄 Function called at:', new Date().toISOString());
+        console.log('🔄 Document ready state:', document.readyState);
+        console.log('🔄 Bootstrap available:', typeof bootstrap !== 'undefined');
+        
+        // 少し遅延を入れてDOM更新を確実にする
+        setTimeout(() => {
+            console.log('🔄 Inside setTimeout callback...');
+            
+            if (typeof bootstrap === 'undefined') {
+                console.warn('⚠️ Bootstrap not available for dropdown reinitialization');
+                return;
+            }
+            
+            const dropdowns = document.querySelectorAll('[data-bs-toggle="dropdown"]');
+            console.log(`🔍 Found ${dropdowns.length} dropdown toggles to reinitialize`);
+            
+            // 全ページのドロップダウン要素をチェック
+            const allDropdownElements = document.querySelectorAll('.dropdown-toggle, .dropdown-toggle-split, [data-bs-toggle="dropdown"]');
+            console.log(`🔍 All dropdown-related elements: ${allDropdownElements.length}`);
+            allDropdownElements.forEach((element, i) => {
+                console.log(`  Element ${i}:`, element.classList.toString(), element.getAttribute('data-bs-toggle'));
+            });
+            
+            // SSH関連のボタンをチェック
+            const sshButtons = document.querySelectorAll('.ssh-connect-btn');
+            console.log(`🔍 SSH buttons found: ${sshButtons.length}`);
+            
+            // btn-groupをチェック
+            const btnGroups = document.querySelectorAll('.btn-group');
+            console.log(`🔍 Button groups found: ${btnGroups.length}`);
+            btnGroups.forEach((group, i) => {
+                console.log(`  Group ${i}:`, group.outerHTML);
+            });
+            
+            // 各ドロップダウンの詳細情報をログ出力
+            dropdowns.forEach((dropdown, index) => {
+                console.log(`Dropdown ${index}:`, dropdown);
+                console.log(`  Text: "${dropdown.textContent.trim()}"`);
+                console.log(`  Parent HTML:`, dropdown.parentElement?.outerHTML);
+                console.log(`  Next sibling (menu):`, dropdown.nextElementSibling);
+            });
+            
+            dropdowns.forEach((dropdown, index) => {
+                try {
+                    // 既存のBootstrapインスタンスがあれば破棄
+                    const existingInstance = bootstrap.Dropdown.getInstance(dropdown);
+                    if (existingInstance) {
+                        console.log(`Disposing existing dropdown instance ${index}`);
+                        existingInstance.dispose();
+                    }
+                    
+                    // 新しいBootstrapドロップダウンインスタンスを作成
+                    const dropdownInstance = new bootstrap.Dropdown(dropdown);
+                    console.log(`✅ Reinitialized dropdown ${index}:`, dropdownInstance);
+                    
+                    // SSH接続ボタンの場合は、z-indexイベントを設定
+                    const btnGroup = dropdown.closest('.btn-group');
+                    if (btnGroup && btnGroup.querySelector('.ssh-connect-btn')) {
+                        console.log(`🔧 Adding event handlers to SSH dropdown ${index}`);
+                        
+                        // Bootstrapイベントリスナーを追加
+                        dropdown.addEventListener('show.bs.dropdown', function(event) {
+                            console.log('🎯 SSH dropdown showing, setting z-index');
+                            if (btnGroup) {
+                                btnGroup.style.zIndex = '9999';
+                                btnGroup.style.position = 'relative';
+                            }
+                        });
+                        
+                        dropdown.addEventListener('hidden.bs.dropdown', function(event) {
+                            console.log('🎯 SSH dropdown hidden, resetting z-index');
+                            if (btnGroup) {
+                                btnGroup.style.zIndex = '';
+                            }
+                        });
+                        
+                        // クリックイベントも手動で追加
+                        dropdown.addEventListener('click', function(event) {
+                            console.log('🎯 Dropdown button clicked manually');
+                            console.log('  Button:', this);
+                            console.log('  Classes:', this.classList);
+                            console.log('  Parent:', this.parentElement);
+                            console.log('  Next sibling:', this.nextElementSibling);
+                            
+                            // 手動でドロップダウンを切り替え
+                            const menu = this.nextElementSibling;
+                            if (menu && menu.classList.contains('dropdown-menu')) {
+                                if (menu.classList.contains('show')) {
+                                    menu.classList.remove('show');
+                                    this.setAttribute('aria-expanded', 'false');
+                                    console.log('  Manual hide menu');
+                                } else {
+                                    menu.classList.add('show');
+                                    this.setAttribute('aria-expanded', 'true');
+                                    console.log('  Manual show menu');
+                                }
+                            }
+                        });
+                    }
+                } catch (error) {
+                    console.error(`❌ Failed to reinitialize dropdown ${index}:`, error);
+                }
+            });
+        }, 100);
     }
 };

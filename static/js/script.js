@@ -151,7 +151,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                 // 通常のサーバーはSSH接続ボタンのみ
                                 const sshConnectableTypes = ['node', 'virtual_machine', 'network_device', 'kvm'];
                                 if (sshConnectableTypes.includes(server.type)) {
-                                    buttonsHtml = `<a href="/ssh/${server.id}" class="btn btn-sm btn-primary" target="_blank">SSH接続</a>`;
+                                    buttonsHtml = `<button class="btn btn-sm btn-primary ssh-connect-btn" data-server-id="${server.id}">SSH接続</button>`;
                                 }
                             }
                             cardFooter.innerHTML = buttonsHtml;
@@ -361,6 +361,8 @@ document.addEventListener('DOMContentLoaded', function() {
             openEditModalForServer(serverId, false); // fromConfigModal = false
         }
     }
+
+    // SSH接続ボタンの処理はserver-management.jsで行われます
 
     function handleConfirmDeleteClick() {
         const serverId = this.dataset.id;
@@ -941,6 +943,8 @@ document.addEventListener('DOMContentLoaded', function() {
             button.removeEventListener('click', handleSetupButtonClick); // 既存のリスナーを削除
             button.addEventListener('click', handleSetupButtonClick); // 新しいリスナーを追加
         });
+
+        // SSH接続ボタンのイベントリスナーはserver-management.jsで処理される
 
         // 削除確認ボタンのイベントリスナー
         document.querySelectorAll('.confirm-delete-btn').forEach(button => {

@@ -99,8 +99,13 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             // 3. サーバー管理機能の初期化
-            if (typeof ServerManagement !== 'undefined' && ServerManagement.initializeEditForm) {
-                ServerManagement.initializeEditForm();
+            if (typeof ServerManagement !== 'undefined') {
+                if (ServerManagement.initializeEditForm) {
+                    ServerManagement.initializeEditForm();
+                }
+                if (ServerManagement.attachSSHEventListeners) {
+                    ServerManagement.attachSSHEventListeners();
+                }
                 console.log('✓ ServerManagement initialized');
             }
             
